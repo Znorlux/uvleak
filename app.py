@@ -365,17 +365,38 @@ def get_admin_user():
     return None
 
 
+def _normalize_email(email):
+    """Misma normalización en registro y login para que el índice coincida."""
+    if not email or not isinstance(email, str):
+        return ''
+    return email.strip().lower()
+
+
 def check_email_exists(email):
     """Verifica si un email existe usando el índice email_to_key (optimizado)."""
+    email = _normalize_email(email)
+    if not email:
+        return False
     key = db.hget('email_to_key', email)
     return key is not None and key != ''
 
 
 def find_user_by_email(email):
     """Buscar un usuario por email usando el índice email_to_key (optimizado)."""
+    email = _normalize_email(email)
+    if not email:
+        return None, None
     key = db.hget('email_to_key', email)
     if not key:
+        # Fallback: índice puede tener el email con otra capitalización (usuarios ya registrados)
+        index = db.hgetall('email_to_key') or {}
+        for stored_email, stored_key in index.items():
+            if _normalize_email(stored_email) == email:
+                key = stored_key
+                break
+    if not key:
         return None, None
+    key = str(key).strip()
     data = db.hgetall(key)
     if not data:
         return None, None
@@ -451,21 +472,24 @@ def email_verification_required(f):
 @email_verification_required
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+        email = _normalize_email(request.form.get('email'))
+        password = (request.form.get('password') or '').strip()
 
         user, user_key = find_user_by_email(email)
 
-        if user and user.get('password') == hashlib.sha256(password.encode()).hexdigest():
-            session_token = secrets.token_hex(32)
-            user['user_key'] = user_key
-            db.set(f'session:{session_token}', json.dumps(user))
+        if user and password:
+            stored_password = str(user.get('password') or '')
+            expected_hash = hashlib.sha256(password.encode()).hexdigest()
+            if stored_password == expected_hash:
+                session_token = secrets.token_hex(32)
+                user['user_key'] = user_key
+                db.set(f'session:{session_token}', json.dumps(user))
 
-            log_entry(f"Login exitoso: {email} — Role: {user.get('role')}")
+                log_entry(f"Login exitoso: {email} — Role: {user.get('role')}")
 
-            resp = make_response(redirect(url_for('index')))
-            resp.set_cookie('session_token', session_token, httponly=False)
-            return resp
+                resp = make_response(redirect(url_for('index')))
+                resp.set_cookie('session_token', session_token, httponly=False)
+                return resp
 
         return render_template('login.html', error='Correo o contraseña incorrectos', email=request.form.get('email'))
 
@@ -476,10 +500,13 @@ def login():
 @email_verification_required
 def register():
     if request.method == 'POST':
-        name = request.form.get('name')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        role = request.form.get('role', 'student')
+        name = (request.form.get('name') or '').strip()
+        email = _normalize_email(request.form.get('email'))
+        password = (request.form.get('password') or '').strip()
+        role = (request.form.get('role') or 'student').strip().lower()
+
+        if not email or not password:
+            return render_template('register.html', error='Correo y contraseña son obligatorios', email=email or request.form.get('email'))
 
         if check_email_exists(email):
             return render_template('register.html', error='Este correo electrónico ya está registrado')
