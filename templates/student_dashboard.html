@@ -36,11 +36,9 @@
                         </div>
                         <button type="submit" class="btn btn-primary">Subir CV</button>
                     </form>
-                    {% if user.cv_path %}
-                    <div class="mt-2">
-                        <small>CV actual: <a href="/view-cv/{{ user.cv_path }}" target="_blank">{{ user.cv_path }}</a></small>
+                    <div id="cvCurrent" class="mt-2">
+                        <small>CV actual: {% if user.cv_path %}<a href="/view-cv/{{ user.cv_path }}" target="_blank">{{ user.cv_path }}</a>{% else %}—{% endif %}</small>
                     </div>
-                    {% endif %}
                     <div id="uploadStatus" class="mt-2"></div>
                 </div>
             </div>
@@ -118,6 +116,9 @@ document.getElementById('uploadCvForm').addEventListener('submit', async functio
 
         if (data.success) {
             status.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+            var fn = data.filename;
+            var cvCurrent = document.getElementById('cvCurrent');
+            if (cvCurrent) cvCurrent.innerHTML = '<small>CV actual: <a href="/view-cv/' + fn + '" target="_blank">' + fn + '</a></small>';
         } else {
             status.innerHTML = '<div class="alert alert-error">' + data.error + '</div>';
         }

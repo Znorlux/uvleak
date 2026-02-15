@@ -667,13 +667,24 @@ def process_cv(filename):
 
 @app.route('/view-cv/<filename>')
 def view_cv(filename):
-    """Servir el CV para que pueda ser visualizado en el navegador."""
+    """Servir el CV: PDF real se muestra con visor nativo; otro contenido (p. ej. HTML) como HTML."""
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-        return content, 200, {'Content-Type': 'text/html'}
-    return "Archivo no encontrado", 404
+    if not os.path.exists(filepath):
+        return "Archivo no encontrado", 404
+    # Detección ligera: si es PDF real, el navegador lo renderiza
+    with open(filepath, 'rb') as f:
+        header = f.read(5)
+    if header == b'%PDF-':
+        return send_file(
+            filepath,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=filename,
+        )
+    # Cualquier otro contenido (p. ej. HTML renombrado como .pdf) se sirve como HTML
+    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+    return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 
 @app.route('/api/profile/update', methods=['PUT'])

