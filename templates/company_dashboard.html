@@ -11,66 +11,87 @@
         </div>
         <div class="nav-user">
             <span>{{ user.name }}</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Cerrar Sesión</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-sm">Cerrar Sesión</a>
         </div>
     </nav>
 
     <div class="dashboard-content">
         <div class="dashboard-header">
-            <h1>Panel de Empresa</h1>
-            <p>{{ user.name }}</p>
-        </div>
-
-        <div class="alert alert-success">
-            <strong>🚩 ACTO 3 Completado:</strong> {{ flag }}
+            <h1>Panel de {{ user.name }}</h1>
+            <p>Gestione candidatos y publique ofertas de pasantía</p>
         </div>
 
         <div class="dashboard-grid">
-            <!-- Card: Candidatos -->
-            <div class="card">
+            <!-- Candidatos asignados -->
+            <div class="card card-wide">
                 <div class="card-header">
-                    <h3>👥 Ver Candidatos</h3>
+                    <h3>Candidatos Asignados</h3>
                 </div>
                 <div class="card-body">
-                    <div class="form-group">
-                        <label>ID de Empresa a consultar:</label>
-                        <input type="number" id="companyIdInput" value="{{ user.id }}" class="form-input">
-                        <small class="form-hint">Prueba con diferentes IDs (1, 2, 3...)</small>
+                    <div id="candidatesList">
+                        <p class="text-muted">Cargando candidatos...</p>
                     </div>
-                    <button onclick="loadCandidates()" class="btn btn-primary">
-                        Cargar Candidatos
-                    </button>
-                    <div id="candidatesList" class="mt-3"></div>
                 </div>
             </div>
 
-            <!-- Card: Publicar Oferta -->
+            <!-- Publicar oferta -->
             <div class="card">
                 <div class="card-header">
-                    <h3>📢 Publicar Oferta</h3>
+                    <h3>Publicar Oferta</h3>
                 </div>
                 <div class="card-body">
-                    <form>
+                    <form id="offerForm">
                         <div class="form-group">
-                            <label>Título del puesto:</label>
-                            <input type="text" class="form-input" placeholder="Ej: Desarrollador Backend">
+                            <label for="offerTitle">Título del puesto</label>
+                            <input type="text" id="offerTitle" class="form-input" placeholder="Ej: Desarrollador Backend">
                         </div>
                         <div class="form-group">
-                            <label>Descripción:</label>
-                            <textarea class="form-input" rows="3"></textarea>
+                            <label for="offerDesc">Descripción</label>
+                            <textarea id="offerDesc" class="form-input" rows="3" placeholder="Describa las responsabilidades y requisitos"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="offerSalary">Salario mensual (COP)</label>
+                            <input type="number" id="offerSalary" class="form-input" placeholder="1500000">
                         </div>
                         <button type="submit" class="btn btn-primary">Publicar</button>
                     </form>
+                    <div id="offerStatus" class="mt-2"></div>
                 </div>
             </div>
 
-            <!-- Card: Flags -->
-            <div class="card card-flag">
+            <!-- Mis ofertas -->
+            <div class="card">
                 <div class="card-header">
-                    <h3>🚩 Flags CTF Capturados</h3>
+                    <h3>Mis Ofertas Publicadas</h3>
                 </div>
                 <div class="card-body">
-                    <div id="flagsList"></div>
+                    {% if offers %}
+                    <ul class="list">
+                        {% for offer in offers %}
+                        <li>
+                            <strong>{{ offer.title }}</strong><br>
+                            <small>Estado: <span class="badge badge-{{ 'student' if offer.status == 'active' else 'coordinator' }}">{{ offer.status }}</span></small><br>
+                            <small class="text-muted">Salario: ${{ offer.salary }} COP</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">No ha publicado ofertas aún.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Información de cuenta -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Información de Cuenta</h3>
+                </div>
+                <div class="card-body">
+                    <p><strong>Empresa:</strong> {{ user.name }}</p>
+                    <p><strong>Email:</strong> {{ user.email }}</p>
+                    <p><strong>Sector:</strong> {{ user.sector | default('No especificado', true) }}</p>
+                    <p><strong>API Key:</strong> <code>{{ user.api_key | default('No asignada', true) }}</code></p>
+                    <p><strong>Teléfono:</strong> {{ user.contact_phone | default('No registrado', true) }}</p>
                 </div>
             </div>
         </div>
@@ -78,63 +99,68 @@
 </div>
 
 <script>
-// ACTO 4: IDOR Horizontal
+// Cargar candidatos al inicio
 async function loadCandidates() {
-    const companyId = document.getElementById('companyIdInput').value;
-    const listEl = document.getElementById('candidatesList');
-    
-    listEl.innerHTML = '<p class="text-info">Cargando...</p>';
-    
+    const el = document.getElementById('candidatesList');
     try {
-        const response = await fetch(`/api/company/candidates?company_id=${companyId}`);
-        const data = await response.json();
-        
-        if (data.candidates) {
-            let html = '<div class="alert alert-info">Candidatos de la empresa ' + data.company_id + '</div>';
-            html += '<ul class="list">';
-            
-            data.candidates.forEach(c => {
-                html += `<li><strong>${c.name}</strong> - ${c.email}<br>
-                        <small>CV: ${c.cv_path}</small></li>`;
-            });
-            
-            html += '</ul>';
-            
-            if (data.flag) {
-                html += `<div class="alert alert-success mt-2">🚩 ${data.flag}</div>`;
-                addFlag(data.flag);
-            }
-            
-            listEl.innerHTML = html;
+        const res = await fetch('/api/company/candidates?company_id={{ user.id }}');
+        const data = await res.json();
+
+        if (!data.candidates || data.candidates.length === 0) {
+            el.innerHTML = '<p class="text-muted">No tiene candidatos asignados actualmente.</p>';
+            return;
         }
-    } catch (error) {
-        listEl.innerHTML = '<div class="alert alert-error">Error al cargar</div>';
+
+        let html = '<table class="data-table"><thead><tr>'
+            + '<th>Nombre</th><th>Email</th><th>Cargo</th><th>Estado</th><th>CV</th>'
+            + '</tr></thead><tbody>';
+
+        data.candidates.forEach(c => {
+            const cvLink = c.cv_path
+                ? '<a href="/view-cv/' + c.cv_path + '" target="_blank">Ver CV</a>'
+                : '—';
+            html += '<tr>'
+                + '<td>' + c.student_name + '</td>'
+                + '<td>' + c.student_email + '</td>'
+                + '<td>' + c.position + '</td>'
+                + '<td><span class="badge badge-student">' + c.status + '</span></td>'
+                + '<td>' + cvLink + '</td>'
+                + '</tr>';
+        });
+
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    } catch (err) {
+        el.innerHTML = '<div class="alert alert-error">Error al cargar candidatos</div>';
     }
 }
+loadCandidates();
 
-// Sistema de flags
-function addFlag(flag) {
-    const flags = JSON.parse(localStorage.getItem('ctf_flags') || '[]');
-    if (!flags.includes(flag)) {
-        flags.push(flag);
-        localStorage.setItem('ctf_flags', JSON.stringify(flags));
+// Publicar oferta
+document.getElementById('offerForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const status = document.getElementById('offerStatus');
+
+    try {
+        const res = await fetch('/api/company/offers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: document.getElementById('offerTitle').value,
+                description: document.getElementById('offerDesc').value,
+                salary: document.getElementById('offerSalary').value,
+            })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            status.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+        } else {
+            status.innerHTML = '<div class="alert alert-error">' + (data.error || 'Error') + '</div>';
+        }
+    } catch (err) {
+        status.innerHTML = '<div class="alert alert-error">Error al crear la oferta</div>';
     }
-    displayFlags();
-}
-
-function displayFlags() {
-    const flagsList = document.getElementById('flagsList');
-    const flags = JSON.parse(localStorage.getItem('ctf_flags') || '[]');
-    
-    if (flags.length === 0) {
-        flagsList.innerHTML = '<p class="text-muted">No hay flags capturados...</p>';
-    } else {
-        flagsList.innerHTML = '<ul class="flag-list">' + 
-            flags.map(f => `<li>🚩 <code>${f}</code></li>`).join('') + 
-            '</ul>';
-    }
-}
-
-displayFlags();
+});
 </script>
 {% endblock %}

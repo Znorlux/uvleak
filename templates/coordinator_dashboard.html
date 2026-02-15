@@ -11,144 +11,79 @@
         </div>
         <div class="nav-user">
             <span>{{ user.name }}</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Cerrar Sesión</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-sm">Cerrar Sesión</a>
         </div>
     </nav>
 
     <div class="dashboard-content">
         <div class="dashboard-header">
-            <h1>Panel de Coordinador</h1>
-            <p>Gestión de pasantías y candidatos</p>
+            <h1>Panel de Coordinación</h1>
+            <p>Gestión de pasantías, candidatos y reportes</p>
         </div>
 
         <div class="dashboard-grid">
-            <!-- Card: Exportar Datos -->
+            <!-- Exportar datos -->
             <div class="card">
                 <div class="card-header">
-                    <h3>📊 Exportar Candidatos</h3>
+                    <h3>Exportar Candidatos</h3>
                 </div>
                 <div class="card-body">
-                    <p>Descarga el archivo con información de todos los candidatos.</p>
-                    <a href="/exports/candidates" class="btn btn-primary" target="_blank">
-                        Descargar Archivo
-                    </a>
-                    <div class="alert alert-info mt-3">
-                        <strong>💡 Pista:</strong> Si el archivo se ve extraño, guárdalo y analízalo con herramientas como <code>file</code> o ábrelo en Excel.
+                    <p>Descargue el reporte con la información de todos los candidatos registrados en el sistema.</p>
+                    <a href="/exports/candidates" class="btn btn-primary" target="_blank">Descargar Reporte</a>
+                </div>
+            </div>
+
+            <!-- Estadísticas -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Estadísticas Generales</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-number">{{ stats.students }}</span>
+                            <span class="stat-label">Estudiantes</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ stats.companies }}</span>
+                            <span class="stat-label">Empresas</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ stats.offers }}</span>
+                            <span class="stat-label">Ofertas</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ stats.interns }}</span>
+                            <span class="stat-label">Pasantías Activas</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Card: Estadísticas -->
-            <div class="card">
+            <!-- Avisos del sistema -->
+            <div class="card card-wide">
                 <div class="card-header">
-                    <h3>📈 Estadísticas</h3>
+                    <h3>Avisos del Sistema</h3>
                 </div>
                 <div class="card-body">
-                    <ul class="list">
-                        <li>Estudiantes activos: 15</li>
-                        <li>Empresas registradas: 8</li>
-                        <li>Ofertas publicadas: 23</li>
-                        <li>Contratos activos: 7</li>
+                    {% if notices %}
+                    <ul class="notice-list">
+                        {% for notice in notices %}
+                        <li class="notice-item notice-{{ notice.type }}">
+                            <div class="notice-header">
+                                <strong>{{ notice.title }}</strong>
+                                <small class="text-muted">{{ notice.date }}</small>
+                            </div>
+                            <p>{{ notice.message }}</p>
+                        </li>
+                        {% endfor %}
                     </ul>
-                </div>
-            </div>
-
-            <!-- Card: Accesos especiales -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>🔐 Acceso Avanzado</h3>
-                </div>
-                <div class="card-body">
-                    <p>Como coordinador tienes acceso a endpoints administrativos.</p>
-                    <div class="form-group">
-                        <label>Probar autenticación JWT:</label>
-                        <textarea id="jwtToken" class="form-input" rows="3" placeholder="Pega tu token JWT aquí"></textarea>
-                    </div>
-                    <button onclick="verifyJWT()" class="btn btn-warning">Verificar Token</button>
-                    <div id="jwtResult" class="mt-2"></div>
-                    
-                    <div class="alert alert-info mt-3">
-                        <strong>💡 Pista:</strong> Revisa el archivo Excel descargado para encontrar información útil.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Flags -->
-            <div class="card card-flag">
-                <div class="card-header">
-                    <h3>🚩 Flags CTF Capturados</h3>
-                </div>
-                <div class="card-body">
-                    <div id="flagsList"></div>
+                    {% else %}
+                    <p class="text-muted">No hay avisos recientes.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-<script>
-// ACTO 7: Verificar JWT
-async function verifyJWT() {
-    const token = document.getElementById('jwtToken').value;
-    const resultEl = document.getElementById('jwtResult');
-    
-    if (!token) {
-        resultEl.innerHTML = '<div class="alert alert-error">Ingresa un token</div>';
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/auth/verify-jwt', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ token: token })
-        });
-        
-        const data = await response.json();
-        
-        if (data.valid) {
-            let html = '<div class="alert alert-success">✅ Token válido</div>';
-            html += '<pre>' + JSON.stringify(data.user, null, 2) + '</pre>';
-            
-            if (data.flag) {
-                html += `<div class="alert alert-success mt-2">🚩 ${data.flag}</div>`;
-                addFlag(data.flag);
-            }
-            
-            resultEl.innerHTML = html;
-        } else {
-            resultEl.innerHTML = '<div class="alert alert-error">❌ Token inválido</div>';
-        }
-    } catch (error) {
-        resultEl.innerHTML = '<div class="alert alert-error">Error al verificar token</div>';
-    }
-}
-
-// Sistema de flags
-function addFlag(flag) {
-    const flags = JSON.parse(localStorage.getItem('ctf_flags') || '[]');
-    if (!flags.includes(flag)) {
-        flags.push(flag);
-        localStorage.setItem('ctf_flags', JSON.stringify(flags));
-    }
-    displayFlags();
-}
-
-function displayFlags() {
-    const flagsList = document.getElementById('flagsList');
-    const flags = JSON.parse(localStorage.getItem('ctf_flags') || '[]');
-    
-    if (flags.length === 0) {
-        flagsList.innerHTML = '<p class="text-muted">No hay flags capturados...</p>';
-    } else {
-        flagsList.innerHTML = '<ul class="flag-list">' + 
-            flags.map(f => `<li>🚩 <code>${f}</code></li>`).join('') + 
-            '</ul>';
-    }
-}
-
-displayFlags();
-</script>
 {% endblock %}

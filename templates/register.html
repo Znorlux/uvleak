@@ -18,30 +18,29 @@
 
         <div class="auth-form-section">
             <h2 class="form-title">Complete el formulario de registro</h2>
-            
+
             {% if error %}
-            <div class="alert alert-error">
-                {{ error }}
-            </div>
+            <div class="alert alert-error">{{ error }}</div>
             {% endif %}
 
             <form method="POST" action="{{ url_for('register') }}" class="auth-form" id="registerForm">
                 <div class="form-group">
                     <label for="name">Nombre completo</label>
-                    <input type="text" id="name" name="name" required 
+                    <input type="text" id="name" name="name" required
                            placeholder="Juan Pérez" class="form-input">
                 </div>
 
                 <div class="form-group">
                     <label for="email">Correo electrónico</label>
-                    <input type="email" id="email" name="email" required 
+                    <input type="email" id="email" name="email" required
+                           value="{{ email or '' }}"
                            placeholder="usuario@ejemplo.com" class="form-input">
                     <small id="emailStatus" class="form-hint"></small>
                 </div>
 
                 <div class="form-group">
                     <label for="password">Contraseña</label>
-                    <input type="password" id="password" name="password" required 
+                    <input type="password" id="password" name="password" required
                            placeholder="••••••••" class="form-input">
                 </div>
 
@@ -53,53 +52,44 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-block">
-                    Registrarse
-                </button>
+                <button type="submit" class="btn btn-primary btn-block">Registrarse</button>
             </form>
 
             <div class="auth-links">
-                <a href="{{ url_for('login') }}" class="link-primary">¿Ya tiene cuenta? Inicie sesión</a>
+                <a href="{{ url_for('index') }}" class="link-secondary">Volver a verificación</a>
+                <a href="{{ url_for('login', email=email) if email else url_for('login') }}" class="link-primary">¿Ya tiene cuenta? Inicie sesión</a>
             </div>
 
             <div class="footer-info">
-                <p>Competencias Digitales | InternLink CTF Lab</p>
+                <p>InternLink &copy; 2026</p>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// ACTO 1: Enumeración de usuarios vía API
-document.getElementById('email').addEventListener('blur', async function() {
+document.getElementById('email').addEventListener('blur', async function () {
     const email = this.value;
-    const statusEl = document.getElementById('emailStatus');
-    
+    const status = document.getElementById('emailStatus');
     if (!email) return;
-    
+
     try {
-        const response = await fetch('/api/check-email', {
+        const res = await fetch('/api/check-email', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email: email })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
         });
-        
-        const data = await response.json();
-        
-        if (data.exists) {
-            statusEl.textContent = '⚠️ ' + data.message;
-            statusEl.style.color = '#ef4444';
-            if (data.flag) {
-                console.log('🚩 FLAG encontrado:', data.flag);
-            }
+        const data = await res.json();
+
+        if (data.registered) {
+            status.textContent = data.message;
+            status.style.color = '#ef4444';
         } else {
-            statusEl.textContent = '✓ ' + data.message;
-            statusEl.style.color = '#10b981';
+            status.textContent = data.message;
+            status.style.color = '#10b981';
         }
-    } catch (error) {
-        console.error('Error:', error);
+    } catch (e) {
+        console.error(e);
     }
 });
 </script>

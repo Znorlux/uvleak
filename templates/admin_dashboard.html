@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Panel Administrador{% endblock %}
+{% block title %}Administración{% endblock %}
 
 {% block body %}
 <div class="dashboard-container">
@@ -10,107 +10,175 @@
             <span class="badge badge-admin">Administrador</span>
         </div>
         <div class="nav-user">
-            <span>{{ user.name }}</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Cerrar Sesión</a>
+            <span>{{ user.name | default(user.email, true) }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-sm">Cerrar Sesión</a>
         </div>
     </nav>
 
     <div class="dashboard-content">
         <div class="dashboard-header">
-            <h1>🎉 ¡Felicidades! Panel de Administrador</h1>
-            <p>Has completado la escalada de privilegios</p>
-        </div>
-
-        <div class="alert alert-success">
-            <strong>🚩 FLAG FINAL:</strong> {{ flag }}
+            <h1>Panel de Administración</h1>
+            <p>Gestión completa del sistema de pasantías</p>
         </div>
 
         <div class="dashboard-grid">
-            <!-- Card: Gestión de Salarios -->
+            <!-- Gestión de salarios -->
             <div class="card">
                 <div class="card-header">
-                    <h3>💰 Gestión de Salarios</h3>
+                    <h3>Gestión de Salarios</h3>
                 </div>
                 <div class="card-body">
-                    <p>Modifica los salarios de los estudiantes sin restricciones.</p>
                     <div class="form-group">
-                        <label>ID Estudiante:</label>
+                        <label for="salaryStudentId">ID del estudiante</label>
                         <input type="number" id="salaryStudentId" value="1" class="form-input">
                     </div>
                     <div class="form-group">
-                        <label>Nuevo Salario:</label>
-                        <input type="number" id="salaryAmount" value="5000000" class="form-input">
+                        <label for="salaryAmount">Nuevo salario (COP)</label>
+                        <input type="number" id="salaryAmount" value="1500000" class="form-input">
                     </div>
-                    <button onclick="updateSalary()" class="btn btn-primary">
-                        Actualizar Salario
-                    </button>
+                    <button onclick="updateSalary()" class="btn btn-primary">Actualizar Salario</button>
                     <div id="salaryStatus" class="mt-2"></div>
                 </div>
             </div>
 
-            <!-- Card: Aprobar Ofertas -->
+            <!-- Gestión de ofertas -->
             <div class="card">
                 <div class="card-header">
-                    <h3>✅ Aprobar Ofertas</h3>
+                    <h3>Gestión de Ofertas</h3>
                 </div>
                 <div class="card-body">
-                    <p>Aprueba o rechaza ofertas de empleo.</p>
                     <div class="form-group">
-                        <label>ID Oferta:</label>
+                        <label for="offerId">ID de la oferta</label>
                         <input type="number" id="offerId" value="1" class="form-input">
                     </div>
                     <div class="form-group">
-                        <label>Estado:</label>
-                        <select id="offerStatus" class="form-input">
-                            <option value="approved">Aprobado</option>
-                            <option value="rejected">Rechazado</option>
+                        <label for="offerStatusSelect">Estado</label>
+                        <select id="offerStatusSelect" class="form-input">
+                            <option value="active">Activa</option>
                             <option value="pending">Pendiente</option>
+                            <option value="rejected">Rechazada</option>
+                            <option value="closed">Cerrada</option>
                         </select>
                     </div>
-                    <button onclick="approveOffer()" class="btn btn-primary">
-                        Cambiar Estado
-                    </button>
+                    <button onclick="approveOffer()" class="btn btn-primary">Cambiar Estado</button>
                     <div id="offerStatusResult" class="mt-2"></div>
                 </div>
             </div>
 
-            <!-- Card: Estudiantes -->
-            <div class="card">
+            <!-- Usuarios registrados -->
+            <div class="card card-wide">
                 <div class="card-header">
-                    <h3>👨‍🎓 Estudiantes Registrados</h3>
+                    <h3>Estudiantes Registrados</h3>
                 </div>
                 <div class="card-body">
-                    <ul class="list">
-                        {% for student in students %}
-                        <li>
-                            <strong>{{ student.name }}</strong><br>
-                            <small>{{ student.email }} | ID: {{ student.id }}</small>
-                        </li>
-                        {% endfor %}
-                    </ul>
+                    {% if students %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Universidad</th>
+                                <th>Rol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in students %}
+                            <tr>
+                                <td>{{ s.id }}</td>
+                                <td>{{ s.name }}</td>
+                                <td>{{ s.email }}</td>
+                                <td>{{ s.university | default('—', true) }}</td>
+                                <td><span class="badge badge-student">{{ s.role }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">No hay estudiantes registrados.</p>
+                    {% endif %}
                 </div>
             </div>
 
-            <!-- Card: Resumen CTF -->
-            <div class="card card-flag">
+            <!-- Pasantías activas -->
+            <div class="card card-wide">
                 <div class="card-header">
-                    <h3>🏆 Resumen del CTF</h3>
+                    <h3>Pasantías</h3>
                 </div>
                 <div class="card-body">
-                    <h4>Vulnerabilidades Explotadas:</h4>
-                    <ol>
-                        <li>✅ Enumeración de usuarios</li>
-                        <li>✅ Stored XSS vía CV</li>
-                        <li>✅ Session Hijacking</li>
-                        <li>✅ IDOR Horizontal</li>
-                        <li>✅ Mass Assignment</li>
-                        <li>✅ Binary File Analysis</li>
-                        <li>✅ JWT Forgery</li>
-                        <li>✅ Exposed Logs</li>
-                        <li>✅ Full Admin Access</li>
-                    </ol>
-                    
-                    <div id="flagsList" class="mt-3"></div>
+                    {% if interns %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Estudiante</th>
+                                <th>Empresa</th>
+                                <th>Cargo</th>
+                                <th>Salario</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for i in interns %}
+                            <tr>
+                                <td>{{ i.student_name }}</td>
+                                <td>{{ i.company_name }}</td>
+                                <td>{{ i.position }}</td>
+                                <td>${{ i.salary }} COP</td>
+                                <td><span class="badge badge-student">{{ i.status }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">No hay pasantías registradas.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Ofertas -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Ofertas de Pasantía</h3>
+                </div>
+                <div class="card-body">
+                    {% if offers %}
+                    <ul class="list">
+                        {% for o in offers %}
+                        <li>
+                            <strong>{{ o.title }}</strong> — {{ o.company_name }}<br>
+                            <small>Estado: <span class="badge badge-info">{{ o.status }}</span> | ID: {{ o.id }}</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">No hay ofertas registradas.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Configuración del sistema -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Configuración del Sistema</h3>
+                </div>
+                <div class="card-body">
+                    {% if config %}
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Parámetro</th><th>Valor</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for key, value in config.items() %}
+                            <tr>
+                                <td><code>{{ key }}</code></td>
+                                <td><code>{{ value }}</code></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">No se pudo cargar la configuración.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -118,84 +186,44 @@
 </div>
 
 <script>
-// Actualizar salario
 async function updateSalary() {
-    const studentId = document.getElementById('salaryStudentId').value;
-    const amount = document.getElementById('salaryAmount').value;
-    const statusEl = document.getElementById('salaryStatus');
-    
+    const status = document.getElementById('salaryStatus');
     try {
-        const response = await fetch('/api/admin/update-salary', {
+        const res = await fetch('/api/admin/update-salary', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                student_id: studentId,
-                salary: amount
+                student_id: document.getElementById('salaryStudentId').value,
+                salary: document.getElementById('salaryAmount').value
             })
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            statusEl.innerHTML = '<div class="alert alert-success">✅ Salario actualizado correctamente</div>';
-        }
-    } catch (error) {
-        statusEl.innerHTML = '<div class="alert alert-error">❌ Error al actualizar</div>';
+        const data = await res.json();
+        status.innerHTML = data.success
+            ? '<div class="alert alert-success">' + data.message + '</div>'
+            : '<div class="alert alert-error">' + (data.error || 'Error') + '</div>';
+    } catch (err) {
+        status.innerHTML = '<div class="alert alert-error">Error de conexión</div>';
     }
 }
 
-// Aprobar oferta
 async function approveOffer() {
-    const offerId = document.getElementById('offerId').value;
-    const status = document.getElementById('offerStatus').value;
-    const resultEl = document.getElementById('offerStatusResult');
-    
+    const status = document.getElementById('offerStatusResult');
     try {
-        const response = await fetch('/api/admin/approve-offer', {
+        const res = await fetch('/api/admin/approve-offer', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                offer_id: offerId,
-                status: status
+                offer_id: document.getElementById('offerId').value,
+                status: document.getElementById('offerStatusSelect').value
             })
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            resultEl.innerHTML = '<div class="alert alert-success">✅ Estado actualizado</div>';
-        }
-    } catch (error) {
-        resultEl.innerHTML = '<div class="alert alert-error">❌ Error al actualizar</div>';
+        const data = await res.json();
+        status.innerHTML = data.success
+            ? '<div class="alert alert-success">' + data.message + '</div>'
+            : '<div class="alert alert-error">' + (data.error || 'Error') + '</div>';
+    } catch (err) {
+        status.innerHTML = '<div class="alert alert-error">Error de conexión</div>';
     }
-}
-
-// Sistema de flags
-function displayFlags() {
-    const flagsList = document.getElementById('flagsList');
-    const flags = JSON.parse(localStorage.getItem('ctf_flags') || '[]');
-    
-    if (flags.length === 0) {
-        flagsList.innerHTML = '<p class="text-muted">No hay flags registrados...</p>';
-    } else {
-        flagsList.innerHTML = '<h4>🚩 Flags Capturados (' + flags.length + '/9):</h4><ul class="flag-list">' + 
-            flags.map(f => `<li>🚩 <code>${f}</code></li>`).join('') + 
-            '</ul>';
-    }
-}
-
-displayFlags();
-
-// Agregar flag final automáticamente
-const flags = JSON.parse(localStorage.getItem('ctf_flags') || '[]');
-if (!flags.includes('{{ flag }}')) {
-    flags.push('{{ flag }}');
-    localStorage.setItem('ctf_flags', JSON.stringify(flags));
-    displayFlags();
 }
 </script>
 {% endblock %}

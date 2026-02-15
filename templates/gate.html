@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Acceso a InternLink{% endblock %}
+
+{% block body %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="logo-section">
+            <div class="logo-circle">
+                <svg width="60" height="60" viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="28" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+                    <text x="30" y="38" text-anchor="middle" font-size="24" fill="#6366f1" font-weight="bold">IL</text>
+                </svg>
+            </div>
+            <h1 class="platform-name">InternLink</h1>
+            <p class="platform-subtitle">Sistema de Gestión de Pasantías</p>
+        </div>
+
+        <div class="auth-form-section">
+            <h2 class="form-title">Verificación de invitación</h2>
+            <p class="gate-description">Para acceder a InternLink debe ingresar el correo electrónico de la persona que lo invitó a la plataforma.</p>
+
+            {% if request.args.get('msg') == 'verify_first' %}
+            <div id="gateVerifyFirstWarning" class="alert alert-warning">Debe verificar su invitación antes de acceder al inicio de sesión o al registro.</div>
+            {% endif %}
+
+            <div id="gateFormBlock">
+                <form id="gateForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="gateEmail">Correo del invitador</label>
+                        <input type="email" id="gateEmail" name="email" required
+                               placeholder="invitador@ejemplo.com" class="form-input" autocomplete="email">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Verificar invitación</button>
+                </form>
+                <p class="gate-hint text-muted mt-2">
+                    Si no tiene el correo a mano, la misma ruta de verificación acepta consultas por otros medios (por ejemplo, GET).
+                </p>
+                <div id="gateStatus" class="mt-2"></div>
+            </div>
+
+            <div id="gateResultBlock" class="gate-result" style="display: none;">
+                <div id="gateResultMessage" class="alert"></div>
+                <div class="gate-actions" id="gateActions" style="display: none;">
+                    <a id="gateLoginLink" href="#" class="btn btn-primary">Iniciar sesión</a>
+                    <a id="gateRegisterLink" href="#" class="btn btn-primary">Crear cuenta nueva</a>
+                </div>
+                <p id="gateHint" class="gate-hint" style="display: none;"></p>
+                <button type="button" id="gateBackBtn" class="btn btn-secondary mt-2">Verificar otro correo</button>
+            </div>
+
+            <div class="footer-info">
+                <p>InternLink &copy; 2026</p>
+                <p class="footer-address">Plataforma de Pasantías Universitarias</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const form = document.getElementById('gateForm');
+    const formBlock = document.getElementById('gateFormBlock');
+    const resultBlock = document.getElementById('gateResultBlock');
+    const resultMessage = document.getElementById('gateResultMessage');
+    const statusEl = document.getElementById('gateStatus');
+    const loginLink = document.getElementById('gateLoginLink');
+    const registerLink = document.getElementById('gateRegisterLink');
+    const backBtn = document.getElementById('gateBackBtn');
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const email = document.getElementById('gateEmail').value.trim();
+        if (!email) return;
+
+        statusEl.innerHTML = '<p class="text-info">Comprobando invitación...</p>';
+        statusEl.style.display = 'block';
+
+        try {
+            const res = await fetch('/api/check-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email })
+            });
+            const data = await res.json();
+
+            statusEl.style.display = 'none';
+            formBlock.style.display = 'none';
+            resultBlock.style.display = 'block';
+
+            const baseLogin = "{{ url_for('login') }}";
+            const baseRegister = "{{ url_for('register') }}";
+            const sep = baseLogin.indexOf('?') >= 0 ? '&' : '?';
+
+            const actionsEl = document.getElementById('gateActions');
+            const hintEl = document.getElementById('gateHint');
+
+            if (data.valid_inviter) {
+                resultMessage.className = 'alert alert-success';
+                resultMessage.textContent = data.message;
+                loginLink.href = baseLogin + sep + 'email=' + encodeURIComponent(email);
+                loginLink.style.display = 'inline-block';
+                registerLink.href = baseRegister;
+                registerLink.style.display = 'inline-block';
+                actionsEl.style.display = 'flex';
+                hintEl.style.display = 'none';
+                var verifyWarning = document.getElementById('gateVerifyFirstWarning');
+                if (verifyWarning) verifyWarning.style.display = 'none';
+            } else {
+                resultMessage.className = 'alert alert-warning';
+                resultMessage.textContent = data.message;
+                hintEl.textContent = 'Solo algunos usuarios tienen permiso para invitar. Puede consultar la misma URL con método GET para ver la lista de contactos del sistema.';
+                hintEl.style.display = 'block';
+                hintEl.className = 'gate-hint text-muted';
+                actionsEl.style.display = 'none';
+            }
+        } catch (err) {
+            statusEl.innerHTML = '<div class="alert alert-error">Error de conexión. Intente de nuevo.</div>';
+            statusEl.style.display = 'block';
+        }
+    });
+
+    backBtn.addEventListener('click', function () {
+        resultBlock.style.display = 'none';
+        formBlock.style.display = 'block';
+        document.getElementById('gateEmail').value = '';
+        document.getElementById('gateEmail').focus();
+    });
+})();
+</script>
+{% endblock %}
