@@ -9,3 +9,7 @@ logs/
 data/
 static/uploads/*
 !static/uploads/.gitkeep
+*.md
+!README.md
+evil.pdf
+payloads/

@@ -1246,6 +1246,3 @@ create_debug_log()
 # Para desarrollo local
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
-
-# Para Vercel - exportar la aplicación
-app = app
