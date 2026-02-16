@@ -672,7 +672,7 @@ def login():
 
         return render_template('login.html', error='Correo o contraseña incorrectos', email=request.form.get('email'))
 
-    return render_template('login.html', email=request.args.get('email', ''))
+    return render_template('login.html')
 
 
 @app.route('/register', methods=['GET', 'POST'])

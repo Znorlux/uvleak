@@ -4,20 +4,16 @@
 
 {% block body %}
 <div class="auth-container">
+
     <div class="auth-card">
         <div class="logo-section">
-            <div class="logo-circle">
-                <svg width="60" height="60" viewBox="0 0 60 60">
-                    <circle cx="30" cy="30" r="28" fill="#fff" stroke="#6366f1" stroke-width="2"/>
-                    <text x="30" y="38" text-anchor="middle" font-size="24" fill="#6366f1" font-weight="bold">IL</text>
-                </svg>
-            </div>
+            <img src="{{ url_for('static', filename='uploads/udemlogo.png') }}" alt="UDEM Logo" class="udem-logo-main">
             <h1 class="platform-name">InternLink</h1>
             <p class="platform-subtitle">Sistema de Gestión de Pasantías</p>
         </div>
 
         <div class="auth-form-section">
-            <h2 class="form-title">Identifíquese usando su cuenta</h2>
+            <h2 class="form-title">Iniciar Sesión</h2>
 
             {% if error %}
             <div class="alert alert-error">{{ error }}</div>
@@ -27,7 +23,6 @@
                 <div class="form-group">
                     <label for="email">Correo electrónico</label>
                     <input type="email" id="email" name="email" required
-                           value="{{ email or '' }}"
                            placeholder="usuario@ejemplo.com" class="form-input">
                 </div>
 
@@ -40,17 +35,29 @@
                 <button type="submit" class="btn btn-primary btn-block">Iniciar Sesión</button>
             </form>
 
-            <div class="auth-links">
-                <a href="#" class="link-secondary">¿Olvidó su contraseña?</a>
+            <div class="info-links">
+                <a href="#" class="info-link">Videotutorial de ingreso a la plataforma</a>
+                <a href="#" class="info-link">Información sobre tu correo electrónico</a>
+                <a href="#" class="info-link">Aviso de Cookies</a>
+            </div>
+
+            <div class="auth-links" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(0,0,0,0.08);">
                 <a href="{{ url_for('index') }}" class="link-secondary">Volver a verificación</a>
-                <a href="{{ url_for('register', email=email) if email else url_for('register') }}" class="link-primary">Crear cuenta nueva</a>
+                <a href="{{ url_for('register') }}" class="link-primary">Crear cuenta nueva</a>
             </div>
 
             <div class="footer-info">
-                <p>InternLink &copy; 2026</p>
-                <p class="footer-address">Plataforma de Pasantías Universitarias</p>
+                <p><strong>Competencias Digitales | Universidad de Medellín</strong></p>
+                <p class="footer-address">Carrera 87 N° 30 - 65 Bloque 11 Oficina 214</p>
+                <p class="footer-address" style="margin-top: 0.5rem; font-size: 0.75rem;">InternLink &copy; 2026</p>
             </div>
         </div>
+    </div>
+
+    <!-- Iconos de ayuda flotantes -->
+    <div class="help-icons">
+        <div class="help-icon accessibility" title="Accesibilidad">♿</div>
+        <div class="help-icon support" title="Ayuda">?</div>
     </div>
 </div>
 {% endblock %}
