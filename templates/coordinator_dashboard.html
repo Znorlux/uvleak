@@ -21,6 +21,18 @@
             <p>Gestión de pasantías, candidatos y reportes</p>
         </div>
 
+        {% if admin_message %}
+        <div class="alert alert-info" style="margin-bottom: 2rem; padding: 1.25rem; border-left: 4px solid #3b82f6;">
+            <strong>Acceso de Administrador Detectado</strong>
+            <p style="margin: 0.75rem 0 0 0;">{{ admin_message.text }}</p>
+            <p style="margin: 0.5rem 0 0 0;">
+                <a href="{{ admin_message.dashboard_url }}" style="color: #3b82f6; font-weight: 600; text-decoration: none;">
+                    {{ admin_message.dashboard_name }}
+                </a>
+            </p>
+        </div>
+        {% endif %}
+
         <div class="dashboard-grid">
             <!-- Exportar datos -->
             <div class="card">
