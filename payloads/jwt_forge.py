@@ -1,50 +1,54 @@
 #!/usr/bin/env python3
 """
-Genera un token JWT firmado con un secret dado.
-Uso: python jwt_forge.py [verify <token>]
+Genera un JWT para el panel admin (HS256).
+Uso:
+  python jwt_forge.py <secret>              -> genera token con payload por defecto (admin)
+  python jwt_forge.py <secret> verify <token>
+  python jwt_forge.py                        -> modo interactivo (pide secret y campos)
 """
 
 import jwt
 import sys
+import json
+
+DEFAULT_PAYLOAD = {"user_id": "1", "email": "admin@internlink.com", "role": "admin"}
 
 
-JWT_SECRET = 'internlink2024'
-
-
-def create_token(user_id='1', email='admin@internlink.com', role='admin'):
-    payload = {
-        'user_id': user_id,
-        'email': email,
-        'role': role,
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
-
-
-def verify_token(token):
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    except jwt.InvalidTokenError as e:
-        return f"Error: {e}"
+def create_token(secret, payload=None):
+    payload = payload or DEFAULT_PAYLOAD
+    return jwt.encode(payload, secret, algorithm='HS256')
 
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'verify':
-        if len(sys.argv) < 3:
-            print("Uso: python jwt_forge.py verify <token>")
+        if len(sys.argv) < 4:
+            print("Uso: python jwt_forge.py <secret> verify <token>")
             return
-        print(verify_token(sys.argv[2]))
-    else:
-        user_id = input("User ID [1]: ").strip() or '1'
-        email = input("Email [admin@internlink.com]: ").strip() or 'admin@internlink.com'
-        role = input("Role [admin]: ").strip() or 'admin'
+        secret, _, token = sys.argv[1], sys.argv[2], sys.argv[3]
+        try:
+            print(jwt.decode(token, secret, algorithms=['HS256']))
+        except jwt.InvalidTokenError as e:
+            print(f"Error: {e}")
+        return
 
-        token = create_token(user_id, email, role)
+    if len(sys.argv) >= 2:
+        secret = sys.argv[1]
+        token = create_token(secret)
+        print("Token (copiar y usar como cookie admin_token o Authorization: Bearer <token>):")
+        print(token)
+        return
 
-        print(f"\nPayload: user_id={user_id}, email={email}, role={role}")
-        print(f"Token:\n{token}\n")
-
-        print("Verificación:")
-        print(verify_token(token))
+    print("Secret (p. ej. el de la hoja Configuracion del Excel): ", end="")
+    secret = input().strip()
+    if not secret:
+        print("Falta el secret.")
+        return
+    print("Payload JSON (Enter = por defecto admin): ", end="")
+    raw = input().strip()
+    payload = json.loads(raw) if raw else DEFAULT_PAYLOAD
+    token = create_token(secret, payload)
+    print("Token:")
+    print(token)
 
 
 if __name__ == '__main__':

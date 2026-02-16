@@ -454,6 +454,21 @@ textarea.form-input {
     background: var(--bg);
 }
 
+/* Tabla de config: valores largos (flags) visibles sin truncar */
+.card-config {
+    overflow: visible;
+}
+.card-body-config {
+    overflow-x: auto;
+}
+.config-table td code {
+    word-break: break-all;
+    overflow-wrap: break-word;
+    white-space: normal;
+    display: inline-block;
+    max-width: 100%;
+}
+
 /* ========================================
    Listas
    ======================================== */

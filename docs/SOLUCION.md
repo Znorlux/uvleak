@@ -137,45 +137,37 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 2. Se descarga un archivo sin extensión (nombre tipo `candidates`). Ábrelo con un editor de texto o revisa los primeros bytes: verás la firma de un ZIP/Office (PK…).
 3. En Linux/Mac: `file candidates` → indicará que es un ZIP o Excel. Renómbralo a `candidates.xlsx`.
 4. En Windows: renómbralo a `candidates.xlsx` y ábrelo con Excel o LibreOffice.
-5. Además de la hoja de candidatos, hay una hoja **Configuracion** (o similar) con parámetros como `jwt_secret`, `admin_endpoint`, `system_token`, etc.
-6. **Flag 6:** En esa hoja de configuración aparece la flag: `FLAG{binary_files_hide_secrets}` (en el campo `system_token` o equivalente).
-7. Anota también `jwt_secret` (p. ej. `internlink2024`) y la ruta del panel admin (p. ej. `/dashboard/admin`); los usarás en el Acto 7.
+5. Además de la hoja de candidatos, hay una hoja **Configuracion** con parámetros como `jwt_secret`, `admin_jwt_payload`, `admin_endpoint`, `system_token`, etc.
+6. **Flag 6:** En esa hoja aparece la flag: `FLAG{binary_files_hide_secrets}` (campo `system_token`).
+7. Anota `jwt_secret`, `admin_jwt_payload` (el JSON que debe llevar el JWT) y `admin_endpoint`; los usarás en el Acto 7 para forjar el token.
 
 ---
 
 ## Acto 7 — JWT con secret débil
 
-**Vulnerabilidad:** El panel de administrador acepta autenticación por JWT (cookie `admin_token` o header `Authorization: Bearer <token>`). El secret usado para firmar el JWT es débil y está expuesto en el Excel del Acto 6. Puedes generar un JWT con `role: admin` y acceder al panel.
+**Vulnerabilidad:** El panel de administrador acepta JWT (cookie `admin_token` o header `Authorization: Bearer <token>`). El secret y el payload esperado están en el Excel del Acto 6 (`jwt_secret` y `admin_jwt_payload`). Con eso puedes generar un token válido.
+
+**Cómo conocer el payload:** En la hoja **Configuracion** del Excel aparece la fila **`admin_jwt_payload`** con el JSON exacto que espera el servidor (p. ej. `{"user_id":"1","email":"admin@internlink.com","role":"admin"}`). No hay que adivinarlo.
+
+**Cómo generar el JWT (elegir una):**
+
+- **Opción A — jwt.io:** Ve a https://jwt.io. En "Payload" pega el valor de `admin_jwt_payload` del Excel. En "Verify Signature" pega el `jwt_secret`. Algoritmo HS256. La web genera el token; copia la parte del token (cabecera.payload.firma).
+- **Opción B — Script del repo:** Con el secret anotado del Excel (p. ej. `internlink2024`):
+  ```bash
+  python payloads/jwt_forge.py internlink2024
+  ```
+  El script usa el payload por defecto (el mismo del Excel) e imprime el token listo para copiar.
 
 **Pasos:**
 
-1. Con el `jwt_secret` del Excel (p. ej. `internlink2024`), genera un JWT con payload:
-   ```json
-   { "user_id": "1", "email": "admin@internlink.com", "role": "admin" }
-   ```
-   Algoritmo: HS256.
-2. Puedes usar el script `payloads/jwt_forge.py` del repo:
-   ```bash
-   python payloads/jwt_forge.py
-   ```
-   O en Python:
-   ```python
-   import jwt
-   token = jwt.encode(
-       {"user_id": "1", "email": "admin@internlink.com", "role": "admin"},
-       "internlink2024",
-       algorithm="HS256"
-   )
-   print(token)
-   ```
-3. En el navegador, abre DevTools → Application → Cookies (o ejecuta en consola):
+1. Genera el token con la opción A o B.
+2. En el navegador, DevTools → Application → Cookies (o consola):
    ```js
-   document.cookie = "admin_token=TU_JWT_AQUI; path=/";
+   document.cookie = "admin_token=TOKEN_GENERADO; path=/";
    location.href = "/dashboard/admin";
    ```
-   Sustituye `TU_JWT_AQUI` por el token generado.
-4. Deberías entrar al **panel de administración**.
-5. **Flag 7:** En el panel admin, en la sección **Configuración del sistema**, en la tabla de parámetros aparece un campo (p. ej. `admin_verification`) con el valor: `FLAG{jwt_forged_successfully}`.
+3. Deberías entrar al **panel de administración**.
+4. **Flag 7:** En el panel admin, en **Configuración del sistema**, el campo `admin_verification` tiene el valor: `FLAG{jwt_forged_successfully}`.
 
 ---
 

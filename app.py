@@ -1011,6 +1011,7 @@ def create_excel_export():
     config_data = [
         ['Parametro', 'Valor'],
         ['jwt_secret', 'internlink2024'],
+        ['admin_jwt_payload', '{"user_id":"1","email":"admin@internlink.com","role":"admin"}'],
         ['admin_endpoint', '/dashboard/admin'],
         ['api_auth_endpoint', '/api/auth/token'],
         ['auth_method', "JWT via cookie 'admin_token' o header 'Authorization: Bearer <token>'"],
