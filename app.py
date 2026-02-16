@@ -87,7 +87,7 @@ def init_db():
             'email': 'empresa@techcorp.com',
             'password': hashlib.sha256('EmpresaPass123!'.encode()).hexdigest(),
             'role': 'company',
-            'sector': 'Tecnología',
+            'sector': 'Tecnologia',
             'api_key': 'tc_prod_FLAG{session_hijacked}_v2',
             'contact_phone': '+57 604 555 0101',
         })
@@ -100,29 +100,45 @@ def init_db():
             'email': 'rrhh@dataflow.com',
             'password': hashlib.sha256('DataFlow2024!'.encode()).hexdigest(),
             'role': 'company',
-            'sector': 'Análisis de Datos',
+            'sector': 'Analisis de Datos',
             'api_key': 'df_prod_8a2c4e6f',
             'contact_phone': '+57 604 555 0202',
         })
         db.hset('email_to_key', 'rrhh@dataflow.com', 'company:2')
 
-    # Sincronizar datos de empresas (por si ya existían sin api_key/sector/teléfono)
-    db.hset('company:1', 'api_key', 'tc_prod_FLAG{session_hijacked}')
-    db.hset('company:1', 'sector', 'Tecnología')
+    if not db.hgetall('company:3'):
+        db.hmset('company:3', {
+            'id': '3',
+            'name': 'SecureLog Corp',
+            'email': 'rrhh@securelog.com',
+            'password': hashlib.sha256('SecureLog99!'.encode()).hexdigest(),
+            'role': 'company',
+            'sector': 'Ciberseguridad',
+            'api_key': 'sl_prod_a1b2c3d4',
+            'contact_phone': '+57 604 555 0303',
+        })
+        db.hset('email_to_key', 'rrhh@securelog.com', 'company:3')
+
+    # Sincronizar datos de empresas (por si ya existian sin api_key/sector/telefono)
+    db.hset('company:1', 'api_key', 'tc_prod_FLAG{session_hijacked}_v2')
+    db.hset('company:1', 'sector', 'Tecnologia')
     db.hset('company:1', 'contact_phone', '+57 604 555 0101')
     db.hset('company:2', 'api_key', 'df_prod_8a2c4e6f')
-    db.hset('company:2', 'sector', 'Análisis de Datos')
+    db.hset('company:2', 'sector', 'Analisis de Datos')
     db.hset('company:2', 'contact_phone', '+57 604 555 0202')
+    db.hset('company:3', 'api_key', 'sl_prod_a1b2c3d4')
+    db.hset('company:3', 'sector', 'Ciberseguridad')
+    db.hset('company:3', 'contact_phone', '+57 604 555 0303')
 
     # Coordinador
     if not db.hgetall('coordinator:1'):
         db.hmset('coordinator:1', {
             'id': '1',
-            'name': 'Carlos Ramírez',
+            'name': 'Carlos Ramirez',
             'email': 'coordinador@internlink.com',
             'password': hashlib.sha256('CoordPass123!'.encode()).hexdigest(),
             'role': 'coordinator',
-            'department': 'Pasantías y Prácticas',
+            'department': 'Pasantias y Practicas',
         })
         db.hset('email_to_key', 'coordinador@internlink.com', 'coordinator:1')
 
@@ -143,11 +159,11 @@ def init_db():
     if not db.hgetall('student:1'):
         db.hmset('student:1', {
             'id': '1',
-            'name': 'María González',
+            'name': 'Maria Gonzalez',
             'email': 'maria.gonzalez@mail.com',
             'password': hashlib.sha256('Student123!'.encode()).hexdigest(),
             'role': 'student',
-            'university': 'Universidad de Medellín',
+            'university': 'Universidad de Medellin',
             'phone': '+57 300 111 2222',
         })
         db.hset('email_to_key', 'maria.gonzalez@mail.com', 'student:1')
@@ -155,7 +171,7 @@ def init_db():
     if not db.hgetall('student:2'):
         db.hmset('student:2', {
             'id': '2',
-            'name': 'Andrés López',
+            'name': 'Andres Lopez',
             'email': 'andres.lopez@mail.com',
             'password': hashlib.sha256('Student456!'.encode()).hexdigest(),
             'role': 'student',
@@ -164,10 +180,11 @@ def init_db():
         })
         db.hset('email_to_key', 'andres.lopez@mail.com', 'student:2')
 
-    # Sincronizar índice email_to_key con usuarios iniciales (por si ya existían sin índice)
+    # Sincronizar indice email_to_key con usuarios iniciales (por si ya existian sin indice)
     for email, key in [
         ('empresa@techcorp.com', 'company:1'),
         ('rrhh@dataflow.com', 'company:2'),
+        ('rrhh@securelog.com', 'company:3'),
         ('coordinador@internlink.com', 'coordinator:1'),
         ('admin@internlink.com', 'admin:1'),
         ('maria.gonzalez@mail.com', 'student:1'),
@@ -180,7 +197,7 @@ def init_db():
         db.hmset('intern:1', {
             'id': '1',
             'student_id': '1',
-            'student_name': 'María González',
+            'student_name': 'Maria Gonzalez',
             'student_email': 'maria.gonzalez@mail.com',
             'company_id': '1',
             'company_name': 'TechCorp SA',
@@ -196,7 +213,7 @@ def init_db():
         db.hmset('intern:2', {
             'id': '2',
             'student_id': '2',
-            'student_name': 'Andrés López',
+            'student_name': 'Andres Lopez',
             'student_email': 'andres.lopez@mail.com',
             'company_id': '2',
             'company_name': 'DataFlow Inc',
@@ -204,7 +221,7 @@ def init_db():
             'salary': '1800000',
             'status': 'active',
             'start_date': '2026-02-01',
-            'evaluation': 'Evaluación confidencial — Calificación: 9.5/10. Código de auditoría: FLAG{idor_horizontal}',
+            'evaluation': 'Calificacion 9.5/10. Buen desempeno en analitica.',
             'cv_path': '',
         })
 
@@ -212,15 +229,15 @@ def init_db():
         db.hmset('intern:3', {
             'id': '3',
             'student_id': '3',
-            'student_name': 'Laura Martínez',
+            'student_name': 'Laura Martinez',
             'student_email': 'laura.martinez@mail.com',
             'company_id': '1',
             'company_name': 'TechCorp SA',
-            'position': 'Diseñadora UX/UI',
+            'position': 'Disenadora UX/UI',
             'salary': '1600000',
             'status': 'pending',
             'start_date': '2026-02-10',
-            'evaluation': 'Pendiente de evaluación.',
+            'evaluation': 'Pendiente de evaluacion.',
             'cv_path': '',
         })
 
@@ -228,7 +245,7 @@ def init_db():
         db.hmset('intern:4', {
             'id': '4',
             'student_id': '4',
-            'student_name': 'Carlos Rodríguez',
+            'student_name': 'Carlos Rodriguez',
             'student_email': 'carlos.rodriguez@mail.com',
             'company_id': '2',
             'company_name': 'DataFlow Inc',
@@ -236,9 +253,50 @@ def init_db():
             'salary': '1700000',
             'status': 'active',
             'start_date': '2026-01-20',
-            'evaluation': 'Buen desempeño en el primer mes.',
+            'evaluation': 'Buen desempeno en el primer mes.',
             'cv_path': '',
         })
+
+    if not db.hgetall('intern:5'):
+        db.hmset('intern:5', {
+            'id': '5',
+            'student_id': '5',
+            'student_name': 'Patricia Mora',
+            'student_email': 'patricia.mora@mail.com',
+            'company_id': '3',
+            'company_name': 'SecureLog Corp',
+            'position': 'Analista de Seguridad',
+            'salary': '2200000',
+            'status': 'active',
+            'start_date': '2026-01-10',
+            'evaluation': 'Evaluacion confidencial. Codigo de auditoria: FLAG{idor_horizontal}',
+            'cv_path': '',
+        })
+
+    if not db.hgetall('intern:6'):
+        db.hmset('intern:6', {
+            'id': '6',
+            'student_id': '6',
+            'student_name': 'Felipe Restrepo',
+            'student_email': 'felipe.restrepo@mail.com',
+            'company_id': '3',
+            'company_name': 'SecureLog Corp',
+            'position': 'Pentester Junior',
+            'salary': '2000000',
+            'status': 'active',
+            'start_date': '2026-01-05',
+            'evaluation': 'Rendimiento adecuado en pruebas de intrusion.',
+            'cv_path': '',
+        })
+
+    # Sincronizar interns 1-4 (por si ya existian con tildes o con flag en company 2)
+    db.hset('intern:1', 'student_name', 'Maria Gonzalez')
+    db.hset('intern:2', 'student_name', 'Andres Lopez')
+    db.hset('intern:2', 'evaluation', 'Calificacion 9.5/10. Buen desempeno en analitica.')
+    db.hset('intern:3', 'student_name', 'Laura Martinez')
+    db.hset('intern:3', 'evaluation', 'Pendiente de evaluacion.')
+    db.hset('intern:4', 'student_name', 'Carlos Rodriguez')
+    db.hset('intern:4', 'evaluation', 'Buen desempeno en el primer mes.')
 
     # Ofertas de pasantía
     if not db.hgetall('offer:1'):
@@ -259,7 +317,7 @@ def init_db():
             'company_id': '2',
             'company_name': 'DataFlow Inc',
             'title': 'Analista de Datos',
-            'description': 'Análisis y visualización de datos empresariales. Excel y Python requeridos.',
+            'description': 'Analisis y visualizacion de datos empresariales. Excel y Python requeridos.',
             'salary': '1800000',
             'status': 'active',
             'created_at': '2026-01-25',
@@ -270,8 +328,8 @@ def init_db():
             'id': '3',
             'company_id': '1',
             'company_name': 'TechCorp SA',
-            'title': 'Diseñador UX/UI',
-            'description': 'Diseño de interfaces y experiencia de usuario para aplicaciones web.',
+            'title': 'Disenador UX/UI',
+            'description': 'Diseno de interfaces y experiencia de usuario para aplicaciones web.',
             'salary': '1600000',
             'status': 'pending',
             'created_at': '2026-02-01',
@@ -281,8 +339,8 @@ def init_db():
     if not db.hgetall('notice:1'):
         db.hmset('notice:1', {
             'id': '1',
-            'title': 'Actualización del módulo de exportación',
-            'message': 'Los reportes de candidatos ahora incluyen información de evaluación y salarios.',
+            'title': 'Actualizacion del modulo de exportacion',
+            'message': 'Los reportes de candidatos ahora incluyen informacion de evaluacion y salarios.',
             'date': '2026-02-05',
             'type': 'info',
         })
@@ -291,7 +349,7 @@ def init_db():
         db.hmset('notice:2', {
             'id': '2',
             'title': 'Mantenimiento programado',
-            'message': 'El sistema estará en mantenimiento el sábado 22 de febrero de 2:00 AM a 6:00 AM.',
+            'message': 'El sistema estara en mantenimiento el sabado 22 de febrero de 2:00 AM a 6:00 AM.',
             'date': '2026-02-10',
             'type': 'warning',
         })
@@ -299,8 +357,8 @@ def init_db():
     if not db.hgetall('notice:3'):
         db.hmset('notice:3', {
             'id': '3',
-            'title': 'Auditoría de seguridad',
-            'message': 'Se detectaron cambios no autorizados en perfiles de usuario. Token de auditoría: FLAG{mass_assignment_abuse}',
+            'title': 'Auditoria de seguridad',
+            'message': 'Se detectaron cambios no autorizados en perfiles de usuario. Token de auditoria: FLAG{mass_assignment_abuse}',
             'date': '2026-01-28',
             'type': 'security',
         })
@@ -824,7 +882,14 @@ def get_candidates():
                 'cv_path': intern.get('cv_path', ''),
             })
 
-    return jsonify({'candidates': candidates, 'company_id': company_id})
+    company = db.hgetall(f'company:{company_id}') or {}
+    company_name = company.get('name', '')
+
+    return jsonify({
+        'candidates': candidates,
+        'company_id': company_id,
+        'company_name': company_name,
+    })
 
 
 @app.route('/api/company/offers', methods=['POST'])
@@ -911,10 +976,12 @@ def create_excel_export():
         ws.cell(row=1, column=col, value=h)
 
     rows = [
-        ['1', 'María González', 'maria.gonzalez@mail.com', 'U. de Medellín', 'TechCorp SA', 'Desarrolladora Backend', '1500000', 'Activo', '2026-01-15'],
-        ['2', 'Andrés López', 'andres.lopez@mail.com', 'U. Nacional', 'DataFlow Inc', 'Analista de Datos', '1800000', 'Activo', '2026-02-01'],
-        ['3', 'Laura Martínez', 'laura.martinez@mail.com', 'U. de Antioquia', 'TechCorp SA', 'Diseñadora UX/UI', '1600000', 'Pendiente', '2026-02-10'],
-        ['4', 'Carlos Rodríguez', 'carlos.rodriguez@mail.com', 'U. EAFIT', 'DataFlow Inc', 'Ing. Datos Junior', '1700000', 'Activo', '2026-01-20'],
+        ['1', 'Maria Gonzalez', 'maria.gonzalez@mail.com', 'U. de Medellin', 'TechCorp SA', 'Desarrolladora Backend', '1500000', 'Activo', '2026-01-15'],
+        ['2', 'Andres Lopez', 'andres.lopez@mail.com', 'U. Nacional', 'DataFlow Inc', 'Analista de Datos', '1800000', 'Activo', '2026-02-01'],
+        ['3', 'Laura Martinez', 'laura.martinez@mail.com', 'U. de Antioquia', 'TechCorp SA', 'Disenadora UX/UI', '1600000', 'Pendiente', '2026-02-10'],
+        ['4', 'Carlos Rodriguez', 'carlos.rodriguez@mail.com', 'U. EAFIT', 'DataFlow Inc', 'Ing. Datos Junior', '1700000', 'Activo', '2026-01-20'],
+        ['5', 'Patricia Mora', 'patricia.mora@mail.com', 'U. Pontificia', 'SecureLog Corp', 'Analista de Seguridad', '2200000', 'Activo', '2026-01-10'],
+        ['6', 'Felipe Restrepo', 'felipe.restrepo@mail.com', 'U. Nacional', 'SecureLog Corp', 'Pentester Junior', '2000000', 'Activo', '2026-01-05'],
     ]
     for r, row_data in enumerate(rows, 2):
         for c, val in enumerate(row_data, 1):
@@ -923,7 +990,7 @@ def create_excel_export():
     # Hoja de configuración interna
     ws2 = wb.create_sheet("Configuracion")
     config_data = [
-        ['Parámetro', 'Valor'],
+        ['Parametro', 'Valor'],
         ['jwt_secret', 'internlink2024'],
         ['admin_endpoint', '/dashboard/admin'],
         ['api_auth_endpoint', '/api/auth/token'],

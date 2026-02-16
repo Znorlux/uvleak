@@ -103,9 +103,9 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 1. Sigue con la sesión de empresa (la que robaste en el Acto 3) o inicia sesión como empresa si lo prefieres.
 2. En el panel de empresa, al cargar “Candidatos”, la app llama a algo como:
    `GET /api/company/candidates?company_id=1`
-3. Cambia el parámetro a `company_id=2` (otra empresa). Puedes hacerlo modificando la petición en DevTools (Network) o la URL si la construyes manualmente.
-4. La respuesta incluye candidatos de la empresa 2, con campos como evaluación, salario, etc.
-5. **Flag 4:** En la **evaluación** de uno de los candidatos de la empresa 2 (p. ej. Andrés López) aparece el texto con la flag: `FLAG{idor_horizontal}`.
+3. Cambia el parametro a `company_id=2` (otra empresa). La respuesta incluye candidatos de DataFlow Inc con datos normales. No hay flag ahi.
+4. Prueba con `company_id=3` (SecureLog Corp). Esa empresa tiene datos mas confidenciales.
+5. **Flag 4:** En la **evaluacion** de uno de los candidatos de la empresa 3 (p. ej. Patricia Mora) aparece la flag: `FLAG{idor_horizontal}`.
 
 ---
 
@@ -220,7 +220,7 @@ Además, en los datos del usuario admin (p. ej. en Redis o en una vista que mues
 2. **Registro** como estudiante (clic en "Crear cuenta nueva" tras verificar la invitación).
 3. **Acto 2** — Subir CV HTML como `.pdf`, comprobar XSS (y que la revisión interna ejecuta el script).
 4. **Acto 3** — Robar cookie de sesión vía XSS, suplantar sesión de empresa y leer la API Key en el panel (flag 3).
-5. **Acto 4** — Con sesión de empresa, pedir candidatos con `company_id=2` y leer la evaluación que contiene la flag 4.
+5. **Acto 4** — Con sesion de empresa, pedir candidatos con `company_id=3` y leer la evaluacion que contiene la flag 4.
 6. **Acto 5** — Con sesión de estudiante, enviar `PUT /api/profile/update` con `"role": "coordinator"`, recargar y entrar al panel de coordinador; leer la flag 5 en Avisos.
 7. **Acto 6** — Descargar `/exports/candidates`, renombrar a `.xlsx`, abrir y leer la hoja de configuración (flag 6 y `jwt_secret`).
 8. **Acto 7** — Forjar JWT con `role: admin` y `jwt_secret`, establecer `admin_token` y acceder a `/dashboard/admin`; leer flag 7 en Configuración.
