@@ -25,7 +25,19 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'internlink_secret_2024'
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+
+# En Vercel (serverless), usar /tmp para archivos temporales
+# En local, usar las carpetas normales
+is_vercel = os.environ.get('VERCEL', False)
+if is_vercel:
+    app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+    logs_folder = '/tmp/logs'
+    data_folder = '/tmp/data'
+else:
+    app.config['UPLOAD_FOLDER'] = 'static/uploads'
+    logs_folder = 'logs'
+    data_folder = 'data'
+
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 JWT_SECRET = 'internlink2024'
@@ -70,7 +82,8 @@ class _Db:
 db = _Db()
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs('logs', exist_ok=True)
+os.makedirs(logs_folder, exist_ok=True)
+os.makedirs(data_folder, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -476,15 +489,19 @@ def find_user_by_email(email):
 # Logging
 # ---------------------------------------------------------------------------
 def log_entry(message):
-    log_path = 'logs/debug.log'
+    log_path = f'{logs_folder}/debug.log'
     ts = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
-    with open(log_path, 'a') as f:
-        f.write(f"{ts} INFO: {message}\n")
+    try:
+        with open(log_path, 'a') as f:
+            f.write(f"{ts} INFO: {message}\n")
+    except Exception:
+        # En Vercel, los logs pueden fallar si /tmp no está disponible
+        pass
 
 
 def create_debug_log():
-    os.makedirs('logs', exist_ok=True)
-    log_path = 'logs/debug.log'
+    os.makedirs(logs_folder, exist_ok=True)
+    log_path = f'{logs_folder}/debug.log'
     content = (
         "[2026-01-10 08:15:32] INFO: Servidor iniciado en puerto 5000\n"
         "[2026-01-10 08:15:33] DEBUG: Conexión a Redis establecida\n"
@@ -969,7 +986,7 @@ def export_candidates():
     if user.get('role') not in ('coordinator', 'admin'):
         return "No autorizado", 403
 
-    filepath = 'data/candidates_export'
+    filepath = f'{data_folder}/candidates_export'
     if not os.path.exists(filepath):
         create_excel_export()
 
@@ -984,7 +1001,7 @@ def export_candidates():
 def create_excel_export():
     from openpyxl import Workbook
 
-    os.makedirs('data', exist_ok=True)
+    os.makedirs(data_folder, exist_ok=True)
 
     wb = Workbook()
     ws = wb.active
@@ -1023,7 +1040,7 @@ def create_excel_export():
         for c, val in enumerate(row_data, 1):
             ws2.cell(row=r, column=c, value=val)
 
-    wb.save('data/candidates_export')
+    wb.save(f'{data_folder}/candidates_export')
 
 
 @app.route('/api/coordinator/stats')
@@ -1088,7 +1105,7 @@ def verify_jwt_token():
 # ---------------------------------------------------------------------------
 @app.route('/logs/debug.log')
 def debug_logs():
-    log_path = 'logs/debug.log'
+    log_path = f'{logs_folder}/debug.log'
     if not os.path.exists(log_path):
         return "Archivo no encontrado", 404
 
@@ -1222,7 +1239,13 @@ def admin_list_users():
 # ---------------------------------------------------------------------------
 # Iniciar aplicación
 # ---------------------------------------------------------------------------
+# Inicializar la base de datos cuando se importa el módulo (necesario para Vercel)
+init_db()
+create_debug_log()
+
+# Para desarrollo local
 if __name__ == '__main__':
-    init_db()
-    create_debug_log()
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+# Para Vercel - exportar la aplicación
+app = app
