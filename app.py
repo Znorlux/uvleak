@@ -29,28 +29,32 @@ from cloudinary import utils as cloudinary_utils
 load_dotenv()
 
 # Configurar Cloudinary: priorizar CLOUDINARY_URL, luego variables individuales
+# NOTA: Esta configuración se ejecuta al importar el módulo, lo cual es correcto para serverless
 cloudinary_url_env = os.getenv('CLOUDINARY_URL')
-if cloudinary_url_env:
-    # Si está CLOUDINARY_URL, Cloudinary la lee automáticamente del entorno
-    # cloudinary.config() sin parámetros lee CLOUDINARY_URL automáticamente
-    cloudinary.config()
-    # Verificar que la configuración se aplicó correctamente
-    import logging
-    logging.info(f"Cloudinary configurado desde CLOUDINARY_URL: cloud_name={cloudinary.config().cloud_name}")
-else:
-    # Fallback a variables individuales
-    cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME', '')
-    api_key = os.getenv('CLOUDINARY_API_KEY', '')
-    api_secret = os.getenv('CLOUDINARY_API_SECRET', '')
-    if cloud_name and api_key and api_secret:
-        cloudinary.config(
-            cloud_name=cloud_name,
-            api_key=api_key,
-            api_secret=api_secret,
-            secure=True
-        )
-        import logging
-        logging.info(f"Cloudinary configurado desde variables individuales: cloud_name={cloud_name}")
+cloudinary_configured = False
+try:
+    if cloudinary_url_env:
+        # Si está CLOUDINARY_URL, Cloudinary la lee automáticamente del entorno
+        # cloudinary.config() sin parámetros lee CLOUDINARY_URL automáticamente
+        cloudinary.config()
+        cloudinary_configured = True
+    else:
+        # Fallback a variables individuales
+        cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME', '')
+        api_key = os.getenv('CLOUDINARY_API_KEY', '')
+        api_secret = os.getenv('CLOUDINARY_API_SECRET', '')
+        if cloud_name and api_key and api_secret:
+            cloudinary.config(
+                cloud_name=cloud_name,
+                api_key=api_key,
+                api_secret=api_secret,
+                secure=True
+            )
+            cloudinary_configured = True
+except Exception as e:
+    # En serverless, la configuración puede fallar silenciosamente si las vars no están disponibles
+    # Se manejará más tarde cuando se intente usar Cloudinary
+    cloudinary_configured = False
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'internlink_secret_2024'
@@ -558,38 +562,54 @@ def find_user_by_email(email):
 # Logging
 # ---------------------------------------------------------------------------
 def log_entry(message):
+    """Escribe entrada de log. En serverless (Vercel), los archivos no persisten entre invocaciones,
+    pero esto está bien porque create_debug_log() regenera el archivo en cada inicio."""
     log_path = 'logs/debug.log'
     ts = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
-    with open(log_path, 'a', encoding='utf-8') as f:
-        f.write(f"{ts} INFO: {message}\n")
+    try:
+        # Crear directorio si no existe (puede fallar en serverless, pero lo intentamos)
+        os.makedirs('logs', exist_ok=True)
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f"{ts} INFO: {message}\n")
+    except (OSError, IOError) as e:
+        # En serverless, escribir archivos puede fallar silenciosamente
+        # Los logs se perderán, pero la aplicación seguirá funcionando
+        pass
 
 
 def create_debug_log():
-    os.makedirs('logs', exist_ok=True)
-    log_path = 'logs/debug.log'
-    content = (
-        "[2026-01-10 08:15:32] INFO: Servidor iniciado en puerto 5000\n"
-        "[2026-01-10 08:15:33] DEBUG: Conexión a Redis establecida\n"
-        "[2026-01-10 08:16:01] INFO: Login de usuario: admin@internlink.com (role: admin)\n"
-        "[2026-01-10 08:17:45] WARNING: Intento de login fallido para admin@internlink.com\n"
-        "[2026-01-10 08:18:02] DEBUG: Cargando configuración JWT...\n"
-        "[2026-01-10 08:18:02] DEBUG: JWT_SECRET = internlink2024\n"
-        "[2026-01-10 08:18:03] INFO: Módulo JWT inicializado\n"
-        "[2026-01-10 08:20:15] ERROR: Excepción no controlada en /api/company/candidates\n"
-        "    Traceback (most recent call last):\n"
-        "      File \"app.py\", line 342, in get_candidates\n"
-        "        validate_company_ownership(user_id, company_id)\n"
-        "    AttributeError: module has no attribute 'validate_company_ownership'\n"
-        "[2026-01-10 08:22:30] DEBUG: Credenciales temporales creadas: temp_admin / TempPass2026!\n"
-        "[2026-01-10 08:25:00] INFO: Token de auditoría del sistema: FLAG{logs_are_sensitive}\n"
-        "[2026-01-10 08:30:00] DEBUG: Admin auth configurado: JWT via cookie 'admin_token'\n"
-        "[2026-01-10 08:35:00] INFO: Proceso de backup completado\n"
-        "[2026-01-10 08:36:00] INFO: Actualizacion masiva de cuentas Bancolombia (pago de pasantias) — endpoint /api/admin/bulk-update-payment-accounts — solo admin\n"
-        "[2026-01-10 08:40:00] WARNING: Rate limiting no configurado para /api/check-email\n"
-        "[2026-01-10 08:45:00] INFO: Bot de revision de CV iniciado — sesion: rev_bot_2026\n"
-    )
-    with open(log_path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    """Crea/regenera el archivo de log de debug. En serverless (Vercel), esto regenera el archivo
+    en cada invocación, lo cual está bien porque el contenido es estático (parte del lab)."""
+    try:
+        os.makedirs('logs', exist_ok=True)
+        log_path = 'logs/debug.log'
+        content = (
+            "[2026-01-10 08:15:32] INFO: Servidor iniciado en puerto 5000\n"
+            "[2026-01-10 08:15:33] DEBUG: Conexión a Redis establecida\n"
+            "[2026-01-10 08:16:01] INFO: Login de usuario: admin@internlink.com (role: admin)\n"
+            "[2026-01-10 08:17:45] WARNING: Intento de login fallido para admin@internlink.com\n"
+            "[2026-01-10 08:18:02] DEBUG: Cargando configuración JWT...\n"
+            "[2026-01-10 08:18:02] DEBUG: JWT_SECRET = internlink2024\n"
+            "[2026-01-10 08:18:03] INFO: Módulo JWT inicializado\n"
+            "[2026-01-10 08:20:15] ERROR: Excepción no controlada en /api/company/candidates\n"
+            "    Traceback (most recent call last):\n"
+            "      File \"app.py\", line 342, in get_candidates\n"
+            "        validate_company_ownership(user_id, company_id)\n"
+            "    AttributeError: module has no attribute 'validate_company_ownership'\n"
+            "[2026-01-10 08:22:30] DEBUG: Credenciales temporales creadas: temp_admin / TempPass2026!\n"
+            "[2026-01-10 08:25:00] INFO: Token de auditoría del sistema: FLAG{logs_are_sensitive}\n"
+            "[2026-01-10 08:30:00] DEBUG: Admin auth configurado: JWT via cookie 'admin_token'\n"
+            "[2026-01-10 08:35:00] INFO: Proceso de backup completado\n"
+            "[2026-01-10 08:36:00] INFO: Actualizacion masiva de cuentas Bancolombia (pago de pasantias) — endpoint /api/admin/bulk-update-payment-accounts — solo admin\n"
+            "[2026-01-10 08:40:00] WARNING: Rate limiting no configurado para /api/check-email\n"
+            "[2026-01-10 08:45:00] INFO: Bot de revision de CV iniciado — sesion: rev_bot_2026\n"
+        )
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+    except (OSError, IOError):
+        # En serverless, crear archivos puede fallar. El archivo /logs/debug.log puede no estar disponible.
+        # Para producción, considera guardar el contenido en Redis y servir desde ahí.
+        pass
 
 
 # ---------------------------------------------------------------------------
