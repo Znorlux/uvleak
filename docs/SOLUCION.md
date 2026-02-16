@@ -171,32 +171,34 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 
 ---
 
-## Acto 8 — Logs expuestos
+## Acto 8 — Logs expuestos (pista por mal diseño)
 
-**Vulnerabilidad:** El archivo de log del servidor está accesible sin autenticación en una ruta predecible: `/logs/debug.log`.
+**Contexto:** La ruta del archivo de log no es algo que el atacante deba adivinar. Por mal diseño, en el **panel de administración** (al que accedes con el JWT forjado en el Acto 7), en la tabla **Configuración del sistema**, aparece el parámetro **`debug_log_path`** con valor `/logs/debug.log`. El texto del panel indica que "soporte puede consultar los registros del sistema (ruta indicada en Configuración)". Así el estudiante descubre que existe un recurso de logs y su URL.
+
+**Vulnerabilidad:** El archivo de log del servidor está accesible **sin autenticación** en esa ruta. Cualquiera que conozca la URL (por la pista del Excel o del panel admin) puede leer su contenido.
 
 **Pasos:**
 
-1. En el navegador (o con curl) solicita:
-   ```
-   GET http://localhost:5000/logs/debug.log
-   ```
-2. Se devuelve el contenido del log en texto plano. Incluye mensajes de arranque, intentos de login, errores y un token de auditoría.
-3. **Flag 8:** En el contenido del log aparece la línea con la flag: `FLAG{logs_are_sensitive}`.
+1. Entra al **panel de administración** (JWT del Acto 7). En la tabla **Configuración del sistema** aparece el parámetro **`debug_log_path`** con valor `/logs/debug.log`. El texto del panel indica que "soporte puede consultar los registros del sistema (ruta indicada en Configuración)".
+2. En el navegador (o con curl) solicita: `GET http://localhost:5000/logs/debug.log`.
+3. Se devuelve el contenido del log en texto plano: mensajes de arranque, intentos de login, errores y un token de auditoría.
+4. **Flag 8:** En el log aparece la línea: `FLAG{logs_are_sensitive}` (token de auditoría del sistema). En un escenario real, ese token podría usarse para acceder a sistemas de backup o auditoría.
 
 ---
 
-## Acto final — Compromiso total (flag 9)
+## Acto final — Misión: compromiso total (flag 9)
 
-**Vulnerabilidad:** Una vez con acceso de administrador (JWT del Acto 7), el panel permite modificar salarios, aprobar ofertas, cambiar estados y ver toda la configuración del sistema sin comprobaciones adicionales.
+**Historia:** Has escalado desde estudiante hasta administrador: robaste sesión de empresa, abusaste de IDOR y de mass assignment, extrajiste secretos del Excel y forjaste el JWT de admin. Ahora estás dentro del **panel de administración**. La misión final es demostrar que el compromiso es total: no solo tienes control sobre la plataforma, sino que puedes leer la configuración crítica y seguir la pista que la propia aplicación deja (los logs) para obtener una prueba más de que la organización no protege sus activos sensibles.
 
-**Pasos:**
+**Objetivo en el panel admin:**
 
-1. Con la cookie `admin_token` ya establecida (Acto 7), estás en el panel de administración.
-2. En la sección **Configuración del sistema** (tabla de parámetros) aparecen claves como `master_key`, `system_key`, `admin_verification`, etc.
-3. **Flag 9:** El valor de `master_key` (o el campo equivalente en esa tabla) es: `FLAG{internlink_compromised}`.
+1. **Probar control total (Flag 9)**  
+   Con la cookie `admin_token` ya establecida (Acto 7), en la sección **Configuración del sistema** aparecen todos los parámetros internos. El valor de **`master_key`** es: **`FLAG{internlink_compromised}`**. Esa es la prueba de que tienes acceso a la "llave maestra" que en un entorno real protegería operaciones críticas.
 
-Además, en los datos del usuario admin (p. ej. en Redis o en una vista que muestre “system_key”) puede aparecer también `FLAG{internlink_compromised}`. La consideras obtenida al tener acceso total al panel y poder leer esa configuración.
+2. **Descubrir la pista de los logs (Acto 8)**  
+   En esa misma tabla verás el parámetro **`debug_log_path`** = `/logs/debug.log`. Por mal diseño, el panel expone la ruta donde se guardan los logs. Visita esa URL (no requiere autenticación) y en el contenido del archivo encontrarás la **Flag 8:** `FLAG{logs_are_sensitive}` (token de auditoría). Cierre realista: no solo conseguiste el panel admin, sino que la propia configuración te indicó dónde estaban los logs sensibles, completando el cuadro del compromiso.
+
+**Resumen del flujo final:** Entras al dashboard de admin → lees `master_key` (flag 9) y `debug_log_path` → visitas `/logs/debug.log` y obtienes la flag 8. El "chiste" final es que el panel, pensado para soporte y operaciones, filtra información que no debería estar ahí y apunta a un recurso (logs) que además está expuesto sin control de acceso.
 
 ---
 
@@ -206,11 +208,10 @@ Además, en los datos del usuario admin (p. ej. en Redis o en una vista que mues
 2. **Registro** como estudiante (clic en "Crear cuenta nueva" tras verificar la invitación).
 3. **Acto 2** — Subir CV HTML como `.pdf`, comprobar XSS (y que la revisión interna ejecuta el script).
 4. **Acto 3** — Robar cookie de sesión vía XSS, suplantar sesión de empresa y leer la API Key en el panel (flag 3).
-5. **Acto 4** — Con sesion de empresa, pedir candidatos con `company_id=3` y leer la evaluacion que contiene la flag 4.
+5. **Acto 4** — Con sesión de empresa, pedir candidatos con `company_id=3` y leer la evaluación que contiene la flag 4; anotar `doc_url` y abrir `/internal/docs/securelog-corp`.
 6. **Acto 5** — Con sesión de estudiante, enviar `PUT /api/profile/update` con `"role": "coordinator"`, recargar y entrar al panel de coordinador; leer la flag 5 en Avisos.
-7. **Acto 6** — Descargar `/exports/candidates`, renombrar a `.xlsx`, abrir y leer la hoja de configuración (flag 6 y `jwt_secret`).
-8. **Acto 7** — Forjar JWT con `role: admin` y `jwt_secret`, establecer `admin_token` y acceder a `/dashboard/admin`; leer flag 7 en Configuración.
-9. **Acto 8** — Solicitar `/logs/debug.log` y localizar la flag 8.
-10. **Acto final** — En el mismo panel admin, leer `master_key` o equivalente para la flag 9.
+7. **Acto 6** — Descargar `/exports/candidates`, renombrar a `.xlsx`, abrir la hoja **Configuracion**: obtener flag 6 (`system_token`), `jwt_secret`, `admin_jwt_payload`, `admin_endpoint`.
+8. **Acto 7** — Forjar JWT con el payload y secret del Excel, establecer `admin_token` y acceder a `/dashboard/admin`; leer flag 7 en `admin_verification`.
+9. **Acto final** — En el panel admin: leer **`master_key`** → **Flag 9** (`FLAG{internlink_compromised}`). En la misma tabla ver **`debug_log_path`**, visitar `/logs/debug.log` → **Flag 8** (`FLAG{logs_are_sensitive}`).
 
-Con esto se completa el flujo del laboratorio y se obtienen las 9 flags en orden.
+Con esto se completa la misión del laboratorio: escalada completa y demostración de que el mal diseño (exponer la ruta de logs en la configuración del panel admin) permite descubrir y abusar de un recurso sensible más.

@@ -373,7 +373,10 @@ def init_db():
             'maintenance_mode': 'false',
             'max_upload_size': '16MB',
             'master_key': 'FLAG{internlink_compromised}',
+            'debug_log_path': '/logs/debug.log',
         })
+    # Pista por mal diseño: ruta de logs expuesta en config (para que el lab descubra Acto 8)
+    db.hset('system:config', 'debug_log_path', '/logs/debug.log')
 
 
 # ---------------------------------------------------------------------------
