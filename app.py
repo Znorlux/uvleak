@@ -863,9 +863,9 @@ def company_dashboard():
     return render_template('company_dashboard.html', user=user, offers=offers)
 
 
-@app.route('/internal/docs')
-def internal_docs():
-    """Documentacion interna (referenciada desde respuestas confidenciales)."""
+@app.route('/internal/docs/securelog-corp')
+def internal_docs_securelog():
+    """Documentacion interna SecureLog Corp (referenciada en respuestas confidenciales)."""
     base_url = request.url_root
     return render_template('internal_docs.html', base_url=base_url)
 
@@ -905,8 +905,8 @@ def get_candidates():
     # Detalle interno que solo se incluye en respuestas de datos confidenciales (empresa 3)
     if company_id == '3':
         payload['internal_ref'] = 'user_data_update_scope'
-        payload['audit_note'] = 'Validar desde perfil de estudiante. Ver documentacion interna: /internal/docs'
-        payload['doc_url'] = '/internal/docs'
+        payload['audit_note'] = 'Ref. doc validacion perfiles (uso interno): /internal/docs/securelog-corp'
+        payload['doc_url'] = '/internal/docs/securelog-corp'
 
     return jsonify(payload)
 

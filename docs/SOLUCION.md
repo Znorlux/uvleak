@@ -106,13 +106,13 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 3. Cambia el parametro a `company_id=2` (otra empresa). La respuesta incluye candidatos de DataFlow Inc con datos normales. No hay flag ahi.
 4. Prueba con `company_id=3` (SecureLog Corp). Esa empresa tiene datos mas confidenciales.
 5. **Flag 4:** En la **evaluacion** de uno de los candidatos (p. ej. Patricia Mora) aparece la flag: `FLAG{idor_horizontal}`.
-6. Revisa la respuesta completa de `company_id=3`. La API devuelve **`internal_ref`**, **`audit_note`** y **`doc_url`**. La nota remite a documentacion interna: **`/internal/docs`**. Abre esa URL en el navegador (misma base que la app, p. ej. `http://localhost:5000/internal/docs`). En esa pagina veras documentacion interna del servidor con ejemplos de **curl para Linux/macOS y para Windows** listos para copiar y pegar; ahi se explica como validar el perfil de estudiante enviando el campo `role`.
+6. Revisa la respuesta completa de `company_id=3`. La API devuelve **`internal_ref`**, **`audit_note`** y **`doc_url`**. La nota hace referencia a documentacion interna de SecureLog Corp: **`/internal/docs/securelog-corp`**. Abre esa URL (p. ej. `http://localhost:5000/internal/docs/securelog-corp`). La pagina esta redactada como doc de uso interno para el equipo de RRHH de SecureLog: explica "validacion de perfiles" en la plataforma y como actualizar el rol (p. ej. a coordinador) con ejemplos de **curl para Linux/macOS y Windows** listos para copiar. Es el recurso que ellos usan y que nos estamos encontrando.
 
 ---
 
 ## Acto 5 — Mass assignment
 
-**Contexto:** En el Acto 4 abriste la pagina de documentacion interna (`/internal/docs`). Ahí aparecen ejemplos de curl para Linux/macOS y Windows. El siguiente paso es ejecutar ese curl con tu sesion de **estudiante** (no de empresa).
+**Contexto:** En el Acto 4, al revisar los datos confidenciales de SecureLog Corp, viste una referencia a su documentacion interna (`/internal/docs/securelog-corp`). Esa pagina esta escrita para su equipo (validacion de perfiles, actualizar rol). El siguiente paso es usar esos ejemplos de curl con tu sesion de **estudiante** (no de empresa).
 
 **Vulnerabilidad:** El endpoint `PUT /api/profile/update` acepta cualquier campo en el JSON (no hay lista blanca). Si envias `role`, el backend lo persiste y la sesion se actualiza.
 
@@ -120,7 +120,7 @@ Este documento describe el flujo completo para resolver el laboratorio: desde un
 
 1. Cierra sesion de empresa e inicia sesion como **estudiante**.
 2. Abre DevTools → Application → Cookies y copia el valor de **`session_token`**.
-3. Abre <code>/internal/docs</code>. Copia el comando de una linea segun tu sistema: **Linux/macOS**, **Windows (PowerShell)** o **Windows (CMD)**.
+3. Abre <code>/internal/docs/securelog-corp</code>. Copia el comando de una linea segun tu sistema: **Linux/macOS**, **Windows (PowerShell)** o **Windows (CMD)**.
 4. Sustituye <code>TU_SESSION_TOKEN</code> por el valor de la cookie y ejecuta el comando.
 5. Si la respuesta es JSON con <code>"success": true</code>, recarga la app; deberias pasar al **panel de coordinador**. (Si envias <code>role: "admin"</code> el servidor responde 403; hay que usar <code>coordinator</code>.)
 6. **Flag 5:** En el panel de coordinador, en **Avisos del sistema**, uno de los avisos contiene la flag: `FLAG{mass_assignment_abuse}`.
